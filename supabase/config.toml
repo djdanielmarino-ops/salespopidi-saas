@@ -17,3 +17,6 @@ verify_jwt = true
 
 [functions.organization-users]
 verify_jwt = true
+
+[functions.onboarding-imports]
+verify_jwt = true

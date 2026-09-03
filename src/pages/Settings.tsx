@@ -8,12 +8,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useTapTypes, useBeerTypes, useCreateBeerType } from '@/hooks/useEquipment';
-import { Landmark, Plus, Users } from 'lucide-react';
+import { FileSpreadsheet, Landmark, Plus, Users } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { UserManagement } from '@/components/settings/UserManagement';
 import { usePermissions } from '@/hooks/usePermissions';
 import { FinancialSettings } from '@/components/settings/FinancialSettings';
+import { ImportManagement } from '@/components/settings/ImportManagement';
 
 export default function Settings() {
   const [tapTypeOpen, setTapTypeOpen] = useState(false);
@@ -88,6 +89,7 @@ export default function Settings() {
             <TabsTrigger value="tap-types">Tipos de Chopeira</TabsTrigger>
             <TabsTrigger value="financial"><Landmark className="mr-2 h-4 w-4" />Financeiro</TabsTrigger>
             {profile?.role === 'admin' && <TabsTrigger value="users"><Users className="mr-2 h-4 w-4" />Funcionários e Acessos</TabsTrigger>}
+            {profile?.role === 'admin' && <TabsTrigger value="imports"><FileSpreadsheet className="mr-2 h-4 w-4" />Importação inicial</TabsTrigger>}
           </TabsList>
 
           <TabsContent value="beer-types" className="space-y-4">
@@ -274,6 +276,7 @@ export default function Settings() {
           </TabsContent>
 
           {profile?.role === 'admin' && <TabsContent value="users" className="space-y-4"><UserManagement /></TabsContent>}
+          {profile?.role === 'admin' && <TabsContent value="imports" className="space-y-4"><ImportManagement /></TabsContent>}
         </Tabs>
       </div>
     </MainLayout>
