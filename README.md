@@ -24,6 +24,7 @@ As variaveis locais devem ser configuradas em `.env` e nunca commitadas. O front
 
 - [Arquitetura SaaS](docs/arquitetura-saas.md)
 - [Plano de migracao multiempresa](docs/plano-migracao-multiempresa.md)
+- [Auditoria de infraestrutura e resolucao por subdominio](docs/auditoria-infraestrutura-e-subdominios.md)
 - [Integracao de WhatsApp](docs/integracao-whatsapp.md)
 
 ## Scripts

@@ -2,6 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactNode } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthGuard } from "@/components/auth/AuthGuard";
 import Dashboard from "./pages/Dashboard";
@@ -25,39 +26,49 @@ import OAuthConsent from "./pages/OAuthConsent";
 import NotFound from "./pages/NotFound";
 import Unauthorized from "./pages/Unauthorized";
 import { PermissionGuard } from "@/components/auth/PermissionGuard";
+import { TenantProvider } from "@/contexts/TenantContext";
+import { TenantGuard } from "@/components/auth/TenantGuard";
 
 const queryClient = new QueryClient();
 
+const Protected = ({ children }: { children: ReactNode }) => (
+  <AuthGuard>
+    <TenantGuard>{children}</TenantGuard>
+  </AuthGuard>
+);
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
+    <TenantProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
           <Route path="/auth" element={<Auth />} />
           <Route path="/reset-password" element={<ResetPassword />} />
 
           <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
-          <Route path="/" element={<AuthGuard><PermissionGuard module="dashboard"><Dashboard /></PermissionGuard></AuthGuard>} />
-          <Route path="/customers" element={<AuthGuard><PermissionGuard module="customers"><Customers /></PermissionGuard></AuthGuard>} />
-          <Route path="/orders/new" element={<AuthGuard><PermissionGuard module="orders" action="manage"><NewOrder /></PermissionGuard></AuthGuard>} />
-          <Route path="/orders" element={<AuthGuard><PermissionGuard module="orders"><Orders /></PermissionGuard></AuthGuard>} />
-          <Route path="/taps" element={<AuthGuard><PermissionGuard module="taps"><Taps /></PermissionGuard></AuthGuard>} />
-          <Route path="/barrels" element={<AuthGuard><PermissionGuard module="barrels"><Barrels /></PermissionGuard></AuthGuard>} />
-          <Route path="/brewery-orders" element={<AuthGuard><PermissionGuard module="barrels"><BreweryOrders /></PermissionGuard></AuthGuard>} />
-          <Route path="/cylinders" element={<AuthGuard><PermissionGuard module="cylinders"><Cylinders /></PermissionGuard></AuthGuard>} />
-          <Route path="/inventory" element={<AuthGuard><PermissionGuard module="inventory"><Inventory /></PermissionGuard></AuthGuard>} />
-          <Route path="/products" element={<AuthGuard><PermissionGuard module="inventory"><Products /></PermissionGuard></AuthGuard>} />
-          <Route path="/settings" element={<AuthGuard><PermissionGuard module="settings"><Settings /></PermissionGuard></AuthGuard>} />
-          <Route path="/financial" element={<AuthGuard><PermissionGuard module="financial"><Financial /></PermissionGuard></AuthGuard>} />
-          <Route path="/costs" element={<AuthGuard><PermissionGuard module="costs"><Costs /></PermissionGuard></AuthGuard>} />
-          <Route path="/crm" element={<AuthGuard><PermissionGuard module="crm"><CRM /></PermissionGuard></AuthGuard>} />
-          <Route path="/unauthorized" element={<AuthGuard><Unauthorized /></AuthGuard>} />
+          <Route path="/" element={<Protected><PermissionGuard module="dashboard"><Dashboard /></PermissionGuard></Protected>} />
+          <Route path="/customers" element={<Protected><PermissionGuard module="customers"><Customers /></PermissionGuard></Protected>} />
+          <Route path="/orders/new" element={<Protected><PermissionGuard module="orders" action="manage"><NewOrder /></PermissionGuard></Protected>} />
+          <Route path="/orders" element={<Protected><PermissionGuard module="orders"><Orders /></PermissionGuard></Protected>} />
+          <Route path="/taps" element={<Protected><PermissionGuard module="taps"><Taps /></PermissionGuard></Protected>} />
+          <Route path="/barrels" element={<Protected><PermissionGuard module="barrels"><Barrels /></PermissionGuard></Protected>} />
+          <Route path="/brewery-orders" element={<Protected><PermissionGuard module="barrels"><BreweryOrders /></PermissionGuard></Protected>} />
+          <Route path="/cylinders" element={<Protected><PermissionGuard module="cylinders"><Cylinders /></PermissionGuard></Protected>} />
+          <Route path="/inventory" element={<Protected><PermissionGuard module="inventory"><Inventory /></PermissionGuard></Protected>} />
+          <Route path="/products" element={<Protected><PermissionGuard module="inventory"><Products /></PermissionGuard></Protected>} />
+          <Route path="/settings" element={<Protected><PermissionGuard module="settings"><Settings /></PermissionGuard></Protected>} />
+          <Route path="/financial" element={<Protected><PermissionGuard module="financial"><Financial /></PermissionGuard></Protected>} />
+          <Route path="/costs" element={<Protected><PermissionGuard module="costs"><Costs /></PermissionGuard></Protected>} />
+          <Route path="/crm" element={<Protected><PermissionGuard module="crm"><CRM /></PermissionGuard></Protected>} />
+          <Route path="/unauthorized" element={<Protected><Unauthorized /></Protected>} />
           <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
+          </Routes>
+        </BrowserRouter>
+      </TooltipProvider>
+    </TenantProvider>
   </QueryClientProvider>
 );
 
