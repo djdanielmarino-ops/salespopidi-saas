@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useTenant } from '@/contexts/TenantContext';
+import { usePlatformAccess } from '@/hooks/usePlatformAccess';
 
 export const ACCESS_MODULES = [
   { key: 'dashboard', label: 'Dashboard', path: '/' },
@@ -35,16 +36,12 @@ type OrganizationMembership = {
   permissions: UserPermissions | null;
 };
 
-type PlatformAccess = {
-  role: 'platform_owner' | 'platform_support' | 'platform_finance' | 'platform_viewer';
-  is_active: boolean;
-};
-
 const FULL_ACCESS_ORGANIZATION_ROLES = new Set(['organization_owner', 'organization_admin']);
 
 export function usePermissions() {
   const { user, loading: authLoading } = useAuth();
   const { organization } = useTenant();
+  const { access: platformAccess, loading: platformLoading } = usePlatformAccess();
   const query = useQuery({
     queryKey: ['user-access', user?.id, organization?.id],
     enabled: !!user && !!organization,
@@ -54,7 +51,7 @@ export function usePermissions() {
       // The generated client types predate the SaaS control-plane migrations.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const db = supabase as any;
-      const [legacyResult, membershipResult, platformResult] = await Promise.all([
+      const [legacyResult, membershipResult] = await Promise.all([
         db.from('user_profiles').select('*').eq('user_id', user!.id).maybeSingle(),
         db
           .from('organization_members')
@@ -62,26 +59,18 @@ export function usePermissions() {
           .eq('user_id', user!.id)
           .eq('organization_id', organization!.id)
           .maybeSingle(),
-        db
-          .from('platform_admins')
-          .select('role, is_active')
-          .eq('user_id', user!.id)
-          .maybeSingle(),
       ]);
 
       if (membershipResult.error) throw membershipResult.error;
-      if (platformResult.error) throw platformResult.error;
 
       return {
         legacyProfile: legacyResult.error ? null : (legacyResult.data as UserProfile | null),
         membership: membershipResult.data as OrganizationMembership | null,
-        platformAccess: platformResult.data as PlatformAccess | null,
       };
     },
   });
 
   const membership = query.data?.membership;
-  const platformAccess = query.data?.platformAccess;
   const hasPlatformAccess = platformAccess?.is_active === true;
   const hasOrganizationFullAccess = membership?.status === 'active'
     && FULL_ACCESS_ORGANIZATION_ROLES.has(membership.role);
@@ -103,6 +92,13 @@ export function usePermissions() {
     return action === 'view' ? level === 'view' || level === 'manage' : level === 'manage';
   };
 
-  return { ...query, profile, can, loading: authLoading || query.isLoading };
+  return {
+    ...query,
+    profile,
+    can,
+    platformAccess,
+    isPlatformOwner: platformAccess?.is_active === true && platformAccess.role === 'platform_owner',
+    loading: authLoading || platformLoading || query.isLoading,
+  };
 }
 

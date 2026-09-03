@@ -100,3 +100,16 @@ Resultados desta entrega:
 - suíte completa: 7 testes passaram e 2 arquivos falharam antes de executar os casos porque o ambiente de teste não fornece `VITE_SUPABASE_URL`/chave ao cliente existente;
 - lint global: 68 erros e 9 avisos preexistentes, distribuídos em arquivos fora do escopo desta base;
 - bundle atual: aproximadamente 1,41 MB minificado (385 KB gzip), acima do alerta de 500 KB do Vite e candidato a code splitting futuro.
+
+## Primeira entrega do painel master
+
+A rota `/master` possui uma guarda própria, independente do contexto de subdomínio, e consulta `platform_admins` sob RLS. Somente um `platform_owner` ativo pode renderizar a interface. O menu exibe a entrada global apenas para esse papel.
+
+O primeiro incremento permite:
+
+- visualizar todas as organizações e indicadores de situação;
+- cadastrar uma organização inicialmente em `trial`;
+- definir o slug que formará `{slug}.app.popidichopp.online`;
+- alterar os estados previstos pelo controle SaaS.
+
+Não foram incluídos neste incremento vínculo de proprietário, planos, módulos, assinatura ou exclusão. Essas operações serão adicionadas com fluxos explícitos e trilha de auditoria; não devem ser improvisadas como mutações genéricas no frontend.

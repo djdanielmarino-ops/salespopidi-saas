@@ -13,6 +13,7 @@ import {
   LogOut,
   Loader2,
   UserSearch,
+  ShieldCheck,
   Send
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -20,6 +21,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import logo from '@/assets/logo.png';
 import { usePermissions } from '@/hooks/usePermissions';
+import { usePlatformAccess } from '@/hooks/usePlatformAccess';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: Home, module: 'dashboard', action: 'view' },
@@ -41,6 +43,7 @@ const navigation = [
 export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const { user, signOut, loading } = useAuth();
   const { can } = usePermissions();
+  const { isPlatformOwner } = usePlatformAccess();
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -59,6 +62,11 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         <img src={logo} alt="Popidi Chopp" className="h-10 w-auto" />
       </div>
       <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-4">
+        {isPlatformOwner && (
+          <NavLink to="/master" onClick={onNavigate} className={({ isActive }) => cn('mb-2 flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold transition-colors', isActive ? 'bg-primary text-primary-foreground' : 'border border-primary/20 text-primary hover:bg-primary/10')}>
+            <ShieldCheck className="h-5 w-5 shrink-0" />Painel Master
+          </NavLink>
+        )}
         {navigation.filter((item) => can(item.module, item.action as 'view' | 'manage')).map((item) => (
           <NavLink
             key={item.name}
