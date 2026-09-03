@@ -1,0 +1,10 @@
+project_id = "okwmroasuvoopbrwmhym"
+
+[functions.n8n-daily-orders]
+verify_jwt = false
+
+[functions.update-nfe]
+verify_jwt = false
+
+[functions.brewery-webhook]
+verify_jwt = false
