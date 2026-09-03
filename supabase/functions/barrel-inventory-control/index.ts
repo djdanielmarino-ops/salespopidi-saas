@@ -73,6 +73,32 @@ Deno.serve(async (req) => {
       return json(200, { adjustment: data })
     }
 
+    if (body.action === 'set_count') {
+      const modelId = String(body.barrel_model_id || '')
+      const beerTypeId = body.beer_type_id ? String(body.beer_type_id) : null
+      const status = String(body.status || '')
+      const quantityAfter = Number(body.quantity_after)
+      const reasonCode = String(body.reason_code || '')
+      if (!['cheio_loja', 'com_cliente', 'vazio_loja', 'na_cervejaria'].includes(status)) {
+        return json(400, { error: 'Localização dos barris inválida.' })
+      }
+      if (!Number.isInteger(quantityAfter) || quantityAfter < 0) {
+        return json(400, { error: 'Quantidade final inválida.' })
+      }
+      if (!reasons.has(reasonCode)) return json(400, { error: 'Motivo de ajuste inválido.' })
+      const { data, error } = await admin.rpc('set_barrel_inventory_count', {
+        p_actor_user_id: actorId,
+        p_barrel_model_id: modelId,
+        p_status: status,
+        p_beer_type_id: beerTypeId,
+        p_quantity_after: quantityAfter,
+        p_reason_code: reasonCode,
+        p_reason: reason,
+      })
+      if (error) throw error
+      return json(200, { adjustment: data })
+    }
+
     return json(400, { error: 'Ação inválida.' })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Erro ao controlar inventário de barris.'

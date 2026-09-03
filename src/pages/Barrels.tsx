@@ -16,6 +16,7 @@ import {
   useBarrelInventoryAdjustments,
   useBarrelPatrimonyTargets,
   useAdjustBarrelInventory,
+  useSetBarrelInventoryCount,
   useSetBarrelPatrimonyTarget,
   useReceiveChoppFromBrewery, 
   useSendToBrewery,
@@ -53,6 +54,8 @@ export default function Barrels() {
   const [sendDialogOpen, setSendDialogOpen] = useState(false);
   const [targetModelId, setTargetModelId] = useState<string | null>(null);
   const [adjustmentItem, setAdjustmentItem] = useState<BarrelInventory | null>(null);
+  const [countDialogOpen, setCountDialogOpen] = useState(false);
+  const [countStatus, setCountStatus] = useState<BarrelStatus>('cheio_loja');
   
   const { data: models } = useBarrelModels();
   const { data: summary, isLoading } = useBarrelSummary();
@@ -66,6 +69,7 @@ export default function Barrels() {
   const sendDailySummary = useSendDailyBarrelSummary();
   const setPatrimonyTarget = useSetBarrelPatrimonyTarget();
   const adjustInventory = useAdjustBarrelInventory();
+  const setInventoryCount = useSetBarrelInventoryCount();
   const { can } = usePermissions();
   const canAdjustBarrels = can('barrel_adjustments', 'manage');
 
@@ -119,6 +123,20 @@ export default function Barrels() {
     setAdjustmentItem(null);
   };
 
+  const handleSetCount = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    await setInventoryCount.mutateAsync({
+      barrelModelId: String(form.get('barrel_model_id')),
+      status: countStatus,
+      beerTypeId: ['cheio_loja', 'com_cliente'].includes(countStatus) ? String(form.get('beer_type_id') || '') : null,
+      quantityAfter: Number(form.get('quantity_after')),
+      reasonCode: String(form.get('reason_code')),
+      reason: String(form.get('reason') || '').trim(),
+    });
+    setCountDialogOpen(false);
+  };
+
   // Calculate totals
   const totals = summary?.reduce((acc, s) => ({
     cheio_loja: acc.cheio_loja + s.cheio_loja,
@@ -136,6 +154,9 @@ export default function Barrels() {
             <p className="text-muted-foreground">Controle de estoque de barris por modelo</p>
           </div>
           <div className="flex flex-wrap gap-2">
+            {canAdjustBarrels && <Button variant="outline" onClick={() => setCountDialogOpen(true)}>
+              <Pencil className="mr-2 h-4 w-4" />Nova contagem / ajuste
+            </Button>}
             <Button
               variant="secondary"
               onClick={() => sendDailySummary.mutate()}
@@ -270,6 +291,55 @@ export default function Barrels() {
             </Dialog>
           </div>
         </div>
+
+        <Dialog open={countDialogOpen} onOpenChange={setCountDialogOpen}>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Registrar localização e contagem</DialogTitle></DialogHeader>
+            <form className="space-y-4" onSubmit={handleSetCount}>
+              <p className="text-sm text-muted-foreground">
+                Use também para a primeira contagem. Se esta combinação já existir, a quantidade será ajustada e não duplicada.
+              </p>
+              <div className="space-y-2">
+                <Label>Volume *</Label>
+                <Select name="barrel_model_id" required><SelectTrigger><SelectValue placeholder="Selecione o volume" /></SelectTrigger><SelectContent>
+                  {models?.map((model) => <SelectItem key={model.id} value={model.id}>{model.volume}L</SelectItem>)}
+                </SelectContent></Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Onde estão os barris? *</Label>
+                <Select value={countStatus} onValueChange={(value) => setCountStatus(value as BarrelStatus)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger><SelectContent>
+                    {Object.entries(statusLabels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              {['cheio_loja', 'com_cliente'].includes(countStatus) && <div className="space-y-2">
+                <Label>Tipo de Chopp *</Label>
+                <Select name="beer_type_id" required><SelectTrigger><SelectValue placeholder="Selecione o tipo" /></SelectTrigger><SelectContent>
+                  {beerTypes?.map((type) => <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>)}
+                </SelectContent></Select>
+              </div>}
+              <div className="space-y-2">
+                <Label htmlFor="new_quantity_after">Quantidade contada *</Label>
+                <Input id="new_quantity_after" name="quantity_after" type="number" min="0" required placeholder="Ex.: 12" />
+              </div>
+              <div className="space-y-2">
+                <Label>Motivo *</Label>
+                <Select name="reason_code" required><SelectTrigger><SelectValue placeholder="Selecione o motivo" /></SelectTrigger><SelectContent>
+                  {Object.entries(adjustmentReasonLabels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
+                </SelectContent></Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="new_adjustment_reason">Detalhes *</Label>
+                <Textarea id="new_adjustment_reason" name="reason" minLength={5} maxLength={500} required placeholder="Ex.: contagem física inicial realizada no depósito" />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => setCountDialogOpen(false)}>Cancelar</Button>
+                <Button disabled={setInventoryCount.isPending}>Salvar contagem</Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
 
         <Dialog open={!!targetModelId} onOpenChange={(open) => !open && setTargetModelId(null)}>
           <DialogContent>
@@ -508,6 +578,12 @@ export default function Barrels() {
                       ))}
                     </TableBody>
                   </Table>
+                )}
+                {!isLoading && !inventory?.some((item) => item.quantity > 0) && (
+                  <div className="py-8 text-center">
+                    <p className="font-medium">Nenhuma contagem registrada.</p>
+                    <p className="mt-1 text-sm text-muted-foreground">Use “Nova contagem / ajuste” para informar onde estão os barris.</p>
+                  </div>
                 )}
               </CardContent>
             </Card>

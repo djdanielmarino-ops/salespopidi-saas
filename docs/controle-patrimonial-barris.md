@@ -42,6 +42,14 @@ As RPCs de gravação são `SECURITY INVOKER`, executáveis somente por `service
 
 O módulo antes chamado `brewery_orders` passa a usar a chave comercial `purchases` e o nome **Compras / Fornecedores**. As tabelas e a rota antigas são mantidas neste momento para compatibilidade. Permissões existentes são migradas a partir de `barrels`, evitando perda de acesso durante a transição.
 
+## Contagem inicial e ajustes
+
+O comando **Nova contagem / ajuste** permite criar a primeira linha de estoque mesmo quando o detalhamento está vazio. O operador autorizado escolhe volume, localização, tipo de chopp quando aplicável, quantidade contada, motivo e justificativa.
+
+Se a combinação de volume, localização e tipo de chopp já existir, o sistema atualiza a contagem existente em vez de duplicá-la. A alteração fica registrada no histórico e em `audit_logs`.
+
+Na primeira versão, “localização” representa o estado operacional agregado: cheio na loja, com cliente, vazio na loja ou na cervejaria. O rastreamento de cada barril por número patrimonial individual é uma evolução separada.
+
 ## Limites e evolução
 
 Este incremento controla quantidades agregadas por litragem. Identificação individual com número patrimonial, QR Code ou RFID deve ser uma etapa posterior para organizações que precisem rastrear cada casco. Também é necessário centralizar progressivamente todas as movimentações operacionais de barris no backend; enquanto fluxos antigos ainda escrevem diretamente em `barrel_inventory`, RLS e auditoria continuam sendo a proteção complementar.

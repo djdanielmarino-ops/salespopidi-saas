@@ -183,6 +183,34 @@ export function useAdjustBarrelInventory() {
   });
 }
 
+export function useSetBarrelInventoryCount() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (values: {
+      barrelModelId: string;
+      status: BarrelStatus;
+      beerTypeId: string | null;
+      quantityAfter: number;
+      reasonCode: string;
+      reason: string;
+    }) => controlBarrelInventory({
+      action: 'set_count',
+      barrel_model_id: values.barrelModelId,
+      status: values.status,
+      beer_type_id: values.beerTypeId,
+      quantity_after: values.quantityAfter,
+      reason_code: values.reasonCode,
+      reason: values.reason,
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['barrel_inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['barrel_inventory_adjustments'] });
+      toast.success('Localização e contagem dos barris atualizadas.');
+    },
+    onError: (error: Error) => toast.error(`Erro ao registrar contagem: ${error.message}`),
+  });
+}
+
 // Update inventory quantity
 export function useUpdateBarrelInventory() {
   const queryClient = useQueryClient();
