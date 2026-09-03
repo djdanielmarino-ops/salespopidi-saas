@@ -14,8 +14,8 @@ const json = (status: number, body: unknown) => new Response(JSON.stringify(body
 const organizationTypes = new Set(['store', 'distributor', 'brewery', 'hybrid'])
 const organizationStatuses = new Set(['trial', 'active', 'past_due', 'suspended', 'cancelled', 'security_blocked'])
 const allowedModules = new Set([
-  'customers', 'orders', 'inventory', 'products', 'taps', 'barrels', 'brewery_orders',
-  'cylinders', 'financial', 'costs', 'crm', 'settings',
+  'customers', 'orders', 'inventory', 'products', 'taps', 'barrels', 'purchases',
+  'cylinders', 'financial', 'costs', 'crm',
 ])
 
 type AdminClient = ReturnType<typeof createClient>
@@ -99,7 +99,7 @@ Deno.serve(async (req) => {
       const { data, error } = await admin.rpc('master_onboard_organization', {
         p_actor_user_id: requesterId,
         p_owner_user_id: owner.id,
-        p_owner_status: invited ? 'invited' : 'active',
+        p_owner_status: 'active',
         p_legal_name: legalName,
         p_trade_name: tradeName,
         p_slug: slug,

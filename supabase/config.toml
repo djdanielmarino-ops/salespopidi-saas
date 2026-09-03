@@ -11,3 +11,9 @@ verify_jwt = false
 
 [functions.master-organizations]
 verify_jwt = true
+
+[functions.barrel-inventory-control]
+verify_jwt = true
+
+[functions.organization-users]
+verify_jwt = true

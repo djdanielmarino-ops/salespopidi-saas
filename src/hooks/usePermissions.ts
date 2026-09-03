@@ -11,6 +11,8 @@ export const ACCESS_MODULES = [
   { key: 'inventory', label: 'Estoque', path: '/inventory' },
   { key: 'taps', label: 'Chopeiras', path: '/taps' },
   { key: 'barrels', label: 'Barris', path: '/barrels' },
+  { key: 'barrel_adjustments', label: 'Ajustes sensíveis de barris', path: '/barrels' },
+  { key: 'purchases', label: 'Compras / Fornecedores', path: '/brewery-orders' },
   { key: 'cylinders', label: 'Cilindros', path: '/cylinders' },
   { key: 'financial', label: 'Financeiro', path: '/financial' },
   { key: 'costs', label: 'Custos', path: '/costs' },

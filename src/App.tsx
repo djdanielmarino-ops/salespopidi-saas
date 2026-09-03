@@ -58,7 +58,7 @@ const App = () => (
           <Route path="/orders" element={<Protected><PermissionGuard module="orders"><Orders /></PermissionGuard></Protected>} />
           <Route path="/taps" element={<Protected><PermissionGuard module="taps"><Taps /></PermissionGuard></Protected>} />
           <Route path="/barrels" element={<Protected><PermissionGuard module="barrels"><Barrels /></PermissionGuard></Protected>} />
-          <Route path="/brewery-orders" element={<Protected><PermissionGuard module="barrels"><BreweryOrders /></PermissionGuard></Protected>} />
+          <Route path="/brewery-orders" element={<Protected><PermissionGuard module="purchases"><BreweryOrders /></PermissionGuard></Protected>} />
           <Route path="/cylinders" element={<Protected><PermissionGuard module="cylinders"><Cylinders /></PermissionGuard></Protected>} />
           <Route path="/inventory" element={<Protected><PermissionGuard module="inventory"><Inventory /></PermissionGuard></Protected>} />
           <Route path="/products" element={<Protected><PermissionGuard module="inventory"><Products /></PermissionGuard></Protected>} />

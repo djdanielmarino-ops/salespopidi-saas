@@ -13,6 +13,7 @@ import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+import { useTenant } from '@/contexts/TenantContext';
 
 type Draft = Pick<UserProfile, 'user_id' | 'name' | 'email' | 'role' | 'is_active' | 'permissions'>;
 const blankPermissions = () => ({
@@ -20,23 +21,27 @@ const blankPermissions = () => ({
   dashboard: 'view',
 }) as UserPermissions;
 
-async function manageUsers(body: Record<string, unknown>) {
-  const { data, error } = await supabase.functions.invoke('manage-users', { body });
+async function manageUsers(organizationId: string, body: Record<string, unknown>) {
+  const { data, error } = await supabase.functions.invoke('organization-users', {
+    body: { ...body, organization_id: organizationId },
+  });
   if (error) throw error;
   if (data?.error) throw new Error(data.error);
   return data;
 }
 
 export function UserManagement() {
+  const { organization } = useTenant();
   const client = useQueryClient();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
   const usersQuery = useQuery({
     queryKey: ['managed-users'],
-    queryFn: async () => (await manageUsers({ action: 'list' })).users as UserProfile[],
+    enabled: !!organization,
+    queryFn: async () => (await manageUsers(organization!.id, { action: 'list' })).users as UserProfile[],
   });
   const save = useMutation({
-    mutationFn: (payload: Record<string, unknown>) => manageUsers(payload),
+    mutationFn: (payload: Record<string, unknown>) => manageUsers(organization!.id, payload),
     onSuccess: () => {
       client.invalidateQueries({ queryKey: ['managed-users'] });
       setOpen(false);

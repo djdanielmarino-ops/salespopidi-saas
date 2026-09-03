@@ -27,6 +27,41 @@ export interface BarrelInventory {
   };
 }
 
+export interface BarrelPatrimonyTarget {
+  id: string;
+  barrel_model_id: string;
+  expected_quantity: number;
+  updated_at: string;
+}
+
+export interface BarrelInventoryAdjustment {
+  id: number;
+  barrel_inventory_id: string;
+  barrel_model_id: string;
+  status: BarrelStatus;
+  beer_type_id: string | null;
+  quantity_before: number;
+  quantity_after: number;
+  quantity_delta: number;
+  reason_code: string;
+  reason: string;
+  created_at: string;
+  barrel_models?: { volume: number };
+  beer_types?: { name: string } | null;
+}
+
+async function controlBarrelInventory(body: Record<string, unknown>) {
+  const { data, error } = await supabase.functions.invoke('barrel-inventory-control', { body });
+  if (!error) return data;
+  let message = error.message;
+  const context = 'context' in error ? error.context : null;
+  if (context instanceof Response) {
+    const payload = await context.clone().json().catch(() => null) as { error?: string } | null;
+    if (payload?.error) message = payload.error;
+  }
+  throw new Error(message);
+}
+
 // Fetch barrel models
 export function useBarrelModels() {
   return useQuery({
@@ -76,6 +111,76 @@ export function useBarrelSummary() {
   });
 
   return { data: summary, ...rest };
+}
+
+export function useBarrelPatrimonyTargets() {
+  return useQuery({
+    queryKey: ['barrel_patrimony_targets'],
+    queryFn: async () => {
+      // Generated types predate the SaaS inventory-control migration.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any)
+        .from('barrel_patrimony_targets')
+        .select('id, barrel_model_id, expected_quantity, updated_at');
+      if (error) throw error;
+      return data as BarrelPatrimonyTarget[];
+    },
+  });
+}
+
+export function useBarrelInventoryAdjustments() {
+  return useQuery({
+    queryKey: ['barrel_inventory_adjustments'],
+    queryFn: async () => {
+      // Generated types predate the SaaS inventory-control migration.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any)
+        .from('barrel_inventory_adjustments')
+        .select('*, barrel_models(volume), beer_types(name)')
+        .order('created_at', { ascending: false })
+        .limit(100);
+      if (error) throw error;
+      return data as BarrelInventoryAdjustment[];
+    },
+  });
+}
+
+export function useSetBarrelPatrimonyTarget() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (values: { barrelModelId: string; expectedQuantity: number; reason: string }) =>
+      controlBarrelInventory({
+        action: 'set_target',
+        barrel_model_id: values.barrelModelId,
+        expected_quantity: values.expectedQuantity,
+        reason: values.reason,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['barrel_patrimony_targets'] });
+      toast.success('Patrimônio de barris atualizado.');
+    },
+    onError: (error: Error) => toast.error(`Erro ao atualizar patrimônio: ${error.message}`),
+  });
+}
+
+export function useAdjustBarrelInventory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (values: { inventoryId: string; quantityAfter: number; reasonCode: string; reason: string }) =>
+      controlBarrelInventory({
+        action: 'adjust',
+        inventory_id: values.inventoryId,
+        quantity_after: values.quantityAfter,
+        reason_code: values.reasonCode,
+        reason: values.reason,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['barrel_inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['barrel_inventory_adjustments'] });
+      toast.success('Contagem ajustada e registrada no histórico.');
+    },
+    onError: (error: Error) => toast.error(`Erro ao ajustar contagem: ${error.message}`),
+  });
 }
 
 // Update inventory quantity

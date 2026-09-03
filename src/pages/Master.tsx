@@ -40,8 +40,8 @@ const statusVariants: Record<OrganizationStatus, 'default' | 'secondary' | 'dest
 const availableModules = [
   ['customers', 'Clientes'], ['orders', 'Pedidos'], ['inventory', 'Estoque'],
   ['products', 'Produtos'], ['taps', 'Chopeiras'], ['barrels', 'Barris'],
-  ['brewery_orders', 'Pedidos à cervejaria'], ['cylinders', 'Cilindros'],
-  ['financial', 'Financeiro'], ['costs', 'Custos'], ['crm', 'CRM'], ['settings', 'Configurações'],
+  ['purchases', 'Compras / Fornecedores'], ['cylinders', 'Cilindros'],
+  ['financial', 'Financeiro'], ['costs', 'Custos'], ['crm', 'CRM'],
 ] as const;
 
 async function invokeMasterFunction(body: Record<string, unknown>) {

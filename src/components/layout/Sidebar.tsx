@@ -32,7 +32,7 @@ const navigation = [
   { name: 'Produtos', href: '/products', icon: Package, module: 'inventory', action: 'view' },
   { name: 'Chopeiras', href: '/taps', icon: Beer, module: 'taps', action: 'view' },
   { name: 'Barris', href: '/barrels', icon: Package, module: 'barrels', action: 'view' },
-  { name: 'Pedidos à Cervejaria', href: '/brewery-orders', icon: Send, module: 'barrels', action: 'view' },
+  { name: 'Compras / Fornecedores', href: '/brewery-orders', icon: Send, module: 'purchases', action: 'view' },
   { name: 'Cilindros', href: '/cylinders', icon: CylinderIcon, module: 'cylinders', action: 'view' },
   { name: 'Financeiro', href: '/financial', icon: BarChart3, module: 'financial', action: 'view' },
   { name: 'Custos', href: '/costs', icon: ReceiptText, module: 'costs', action: 'view' },
