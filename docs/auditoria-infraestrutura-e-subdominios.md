@@ -101,15 +101,43 @@ Resultados desta entrega:
 - lint global: 68 erros e 9 avisos preexistentes, distribuídos em arquivos fora do escopo desta base;
 - bundle atual: aproximadamente 1,41 MB minificado (385 KB gzip), acima do alerta de 500 KB do Vite e candidato a code splitting futuro.
 
-## Primeira entrega do painel master
+## Painel master e onboarding
 
 A rota `/master` possui uma guarda própria, independente do contexto de subdomínio, e consulta `platform_admins` sob RLS. Somente um `platform_owner` ativo pode renderizar a interface. O menu exibe a entrada global apenas para esse papel.
 
-O primeiro incremento permite:
+O painel permite:
 
 - visualizar todas as organizações e indicadores de situação;
-- cadastrar uma organização inicialmente em `trial`;
+- cadastrar uma organização inicialmente em `trial`, com 14 dias de avaliação;
 - definir o slug que formará `{slug}.app.popidichopp.online`;
-- alterar os estados previstos pelo controle SaaS.
+- localizar um usuário do Auth pelo e-mail ou convidar um novo proprietário;
+- criar o vínculo `organization_owner` e habilitar os módulos iniciais;
+- alterar os estados previstos pelo controle SaaS;
+- auditar o onboarding e toda mudança de status em `audit_logs`.
 
-Não foram incluídos neste incremento vínculo de proprietário, planos, módulos, assinatura ou exclusão. Essas operações serão adicionadas com fluxos explícitos e trilha de auditoria; não devem ser improvisadas como mutações genéricas no frontend.
+### Limite de confiança
+
+O navegador nunca recebe `SUPABASE_SERVICE_ROLE_KEY`. A interface chama a Edge Function `master-organizations` com a sessão do usuário. A função valida o JWT, confirma `platform_owner` ativo em `platform_admins` e somente então usa o cliente administrativo.
+
+As gravações relacionadas são executadas por RPCs transacionais `SECURITY INVOKER`, revogadas para `public`, `anon` e `authenticated` e concedidas somente a `service_role`. As RPCs também repetem a validação do ator em `platform_admins`. Esse desenho evita organizações parciais quando uma inserção de vínculo, módulo ou auditoria falha.
+
+O sistema legado `manage-users` permanece separado e inalterado. Ele continua gerenciando `user_profiles`; não foi reaproveitado porque sua fronteira de autorização é diferente da administração global da plataforma.
+
+### Convite e ativação
+
+- usuário já existente no Supabase Auth: vínculo inicial `active`;
+- usuário inexistente: `inviteUserByEmail` e vínculo inicial `invited`;
+- retorno do convite: `https://{slug}.app.popidichopp.online/reset-password`;
+- o wildcard `https://*.app.popidichopp.online/reset-password` deve constar nas Redirect URLs do Supabase Auth;
+- `APP_BASE_DOMAIN=app.popidichopp.online` pode ser definido como segredo da Edge Function; há fallback explícito para esse domínio.
+
+### Ordem de publicação
+
+1. vincular a CLI ao projeto SaaS `qrpacpoxwewjzbsdjzai` e aplicar `20260903144641_master_organization_onboarding.sql`;
+2. publicar `master-organizations` com verificação JWT habilitada;
+3. cadastrar a Redirect URL wildcard no Supabase Auth;
+4. publicar o frontend na Vercel;
+5. criar uma organização de teste com e-mail novo e confirmar convite, vínculo, módulos e auditoria;
+6. repetir com um usuário Auth já existente.
+
+Planos, assinaturas, alteração posterior de módulos e exclusão de organizações continuam fora deste incremento. Exclusão não será adicionada sem política de retenção e recuperação.

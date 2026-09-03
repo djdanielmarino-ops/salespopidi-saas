@@ -6,6 +6,7 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -36,6 +37,26 @@ const statusVariants: Record<OrganizationStatus, 'default' | 'secondary' | 'dest
   cancelled: 'outline', security_blocked: 'destructive',
 };
 
+const availableModules = [
+  ['customers', 'Clientes'], ['orders', 'Pedidos'], ['inventory', 'Estoque'],
+  ['products', 'Produtos'], ['taps', 'Chopeiras'], ['barrels', 'Barris'],
+  ['brewery_orders', 'Pedidos à cervejaria'], ['cylinders', 'Cilindros'],
+  ['financial', 'Financeiro'], ['costs', 'Custos'], ['crm', 'CRM'], ['settings', 'Configurações'],
+] as const;
+
+async function invokeMasterFunction(body: Record<string, unknown>) {
+  const { data, error } = await supabase.functions.invoke('master-organizations', { body });
+  if (!error) return data;
+
+  let message = error.message;
+  const context = 'context' in error ? error.context : null;
+  if (context instanceof Response) {
+    const payload = await context.clone().json().catch(() => null) as { error?: string } | null;
+    if (payload?.error) message = payload.error;
+  }
+  throw new Error(message);
+}
+
 export default function Master() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const queryClient = useQueryClient();
@@ -56,28 +77,30 @@ export default function Master() {
   });
 
   const createOrganization = useMutation({
-    mutationFn: async (values: { legalName: string; tradeName: string; slug: string; type: OrganizationType }) => {
-      const { error } = await db.from('organizations').insert({
+    mutationFn: async (values: { legalName: string; tradeName: string; slug: string; type: OrganizationType; ownerEmail: string; modules: string[] }) => {
+      return invokeMasterFunction({
+        action: 'onboard',
         legal_name: values.legalName,
-        trade_name: values.tradeName || null,
+        trade_name: values.tradeName,
         slug: values.slug,
         organization_type: values.type,
-        status: 'trial',
+        owner_email: values.ownerEmail,
+        modules: values.modules,
       });
-      if (error) throw error;
     },
-    onSuccess: async () => {
+    onSuccess: async (result) => {
       await queryClient.invalidateQueries({ queryKey: ['master-organizations'] });
       setDialogOpen(false);
-      toast.success('Organização criada em período de teste');
+      toast.success(result?.owner_invited
+        ? 'Organização criada e convite enviado ao proprietário'
+        : 'Organização criada e proprietário vinculado');
     },
     onError: (error: Error) => toast.error(`Não foi possível criar a organização: ${error.message}`),
   });
 
   const updateStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: OrganizationStatus }) => {
-      const { error } = await db.from('organizations').update({ status }).eq('id', id);
-      if (error) throw error;
+      await invokeMasterFunction({ action: 'update_status', organization_id: id, status });
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['master-organizations'] });
@@ -98,6 +121,8 @@ export default function Master() {
       tradeName: String(form.get('trade_name') ?? '').trim(),
       slug: String(form.get('slug') ?? '').trim().toLowerCase(),
       type: String(form.get('organization_type')) as OrganizationType,
+      ownerEmail: String(form.get('owner_email') ?? '').trim().toLowerCase(),
+      modules: form.getAll('modules').map(String),
     });
   };
 
@@ -112,14 +137,15 @@ export default function Master() {
           </div>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild><Button><Plus className="mr-2 h-4 w-4" />Nova organização</Button></DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
               <DialogHeader>
                 <DialogTitle>Criar organização</DialogTitle>
-                <DialogDescription>A empresa será criada em período de teste. O proprietário será vinculado em uma etapa separada.</DialogDescription>
+                <DialogDescription>A empresa será criada com 14 dias de teste. Um usuário existente será vinculado; caso contrário, enviaremos um convite.</DialogDescription>
               </DialogHeader>
               <form className="space-y-4" onSubmit={handleCreate}>
                 <div className="space-y-2"><Label htmlFor="legal_name">Razão social</Label><Input id="legal_name" name="legal_name" required /></div>
                 <div className="space-y-2"><Label htmlFor="trade_name">Nome fantasia</Label><Input id="trade_name" name="trade_name" /></div>
+                <div className="space-y-2"><Label htmlFor="owner_email">E-mail do proprietário</Label><Input id="owner_email" name="owner_email" type="email" autoComplete="email" required /></div>
                 <div className="space-y-2">
                   <Label htmlFor="slug">Subdomínio</Label>
                   <div className="flex items-center gap-2"><Input id="slug" name="slug" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="empresa" required /><span className="whitespace-nowrap text-sm text-muted-foreground">.app.popidichopp.online</span></div>
@@ -134,7 +160,20 @@ export default function Master() {
                     </SelectContent>
                   </Select>
                 </div>
-                <Button className="w-full" type="submit" disabled={createOrganization.isPending}>Criar organização</Button>
+                <fieldset className="space-y-3">
+                  <legend className="text-sm font-medium">Módulos iniciais</legend>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {availableModules.map(([value, label]) => (
+                      <label key={value} className="flex cursor-pointer items-center gap-2 rounded-md border p-3 text-sm">
+                        <Checkbox name="modules" value={value} defaultChecked />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+                <Button className="w-full" type="submit" disabled={createOrganization.isPending}>
+                  {createOrganization.isPending ? 'Criando e vinculando...' : 'Criar organização'}
+                </Button>
               </form>
             </DialogContent>
           </Dialog>
@@ -177,4 +216,3 @@ export default function Master() {
     </MainLayout>
   );
 }
-

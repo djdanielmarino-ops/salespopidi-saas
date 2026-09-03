@@ -1,4 +1,4 @@
-project_id = "okwmroasuvoopbrwmhym"
+project_id = "qrpacpoxwewjzbsdjzai"
 
 [functions.n8n-daily-orders]
 verify_jwt = false
@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.brewery-webhook]
 verify_jwt = false
+
+[functions.master-organizations]
+verify_jwt = true
