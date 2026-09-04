@@ -12,7 +12,7 @@ export function useOrders() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('orders')
-        .select('*, customers(*), taps(*, tap_types(*)), cylinders(*)')
+        .select('*, customers(*), taps(*, tap_types(*)), cylinders(*), payments(*)')
         .order('created_at', { ascending: false });
       
       if (error) throw error;
@@ -581,6 +581,7 @@ export function useAddPayment() {
       return data;
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['orders'] });
       queryClient.invalidateQueries({ queryKey: ['payments'] });
       queryClient.invalidateQueries({ queryKey: ['financial-ledger'] });
       queryClient.invalidateQueries({ queryKey: ['financial'] });

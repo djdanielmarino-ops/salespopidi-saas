@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Label } from '@/components/ui/label';
 import { useOrders, useReturnEquipment, useAddPayment, useOrderItems, useOrderProductItems, useOrderPayments, useUpdateOrderStatus, useDeleteOrder } from '@/hooks/useOrders';
 import { Order, OrderItem, OrderStatus } from '@/types/database';
-import { Plus, Search, Pencil, Printer, FileText, Trash2 } from 'lucide-react';
+import { Columns3, FileText, LayoutList, Pencil, Plus, Printer, Search, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -24,11 +24,16 @@ import { calculatePaymentAmounts, usePaymentMethodConfigs } from '@/hooks/useFin
 import { CustomerFinancialPendingDialog } from '@/components/orders/CustomerFinancialPendingDialog';
 import { CustomerPendingOrder, fetchCustomerPendingOrders } from '@/lib/customerFinancialPending';
 import { toast } from 'sonner';
+import { getOrderPaidAmount, getOrderPaymentStatus, OrderPaymentStatus } from '@/lib/orderPaymentStatus';
+import { OrdersKanban } from '@/components/orders/OrdersKanban';
 
 
 export default function Orders() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [paymentFilter, setPaymentFilter] = useState<'all' | OrderPaymentStatus>('all');
+  const [deliveryFilter, setDeliveryFilter] = useState<string>('all');
+  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
@@ -66,19 +71,23 @@ export default function Orders() {
   const { data: orderProductItems } = useOrderProductItems(selectedOrder?.id || null);
   const { data: orderPayments } = useOrderPayments(selectedOrder?.id || null);
 
-  // Fetch all payments for all orders to calculate payment status
-  const ordersWithPaymentStatus = orders?.map(order => {
-    // We'll calculate this in the component for now
-    return order;
-  });
-
-  const filteredOrders = ordersWithPaymentStatus?.filter(order => {
+  const filteredOrders = orders?.filter(order => {
     const matchesSearch = 
       order.customers?.full_name.toLowerCase().includes(search.toLowerCase()) ||
       order.order_number.toString().includes(search);
     const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    const matchesPayment = paymentFilter === 'all' || getOrderPaymentStatus(order) === paymentFilter;
+    const matchesDelivery = deliveryFilter === 'all' || order.delivery_type === deliveryFilter;
+    return matchesSearch && matchesStatus && matchesPayment && matchesDelivery;
   });
+
+  const openDetails = (order: Order) => { setSelectedOrder(order); setDetailsDialogOpen(true); };
+  const openPayment = (order: Order) => {
+    setSelectedOrder(order);
+    setPaymentAmount(Math.max(0, Number(order.total) - getOrderPaidAmount(order.payments)));
+    setSelectedMethodId('');
+    setPaymentDialogOpen(true);
+  };
 
   const sendWebhook = async (order: Order, action: 'saida' | 'entrada') => {
     try {
@@ -224,7 +233,7 @@ export default function Orders() {
 
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-4">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
               <div className="relative flex-1 max-w-sm">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -234,8 +243,9 @@ export default function Orders() {
                   className="pl-10"
                 />
               </div>
+              <div className="flex flex-1 flex-wrap gap-2">
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-40">
+                <SelectTrigger className="w-[170px]">
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
@@ -246,12 +256,25 @@ export default function Orders() {
                   <SelectItem value="cancelado">Cancelado</SelectItem>
                 </SelectContent>
               </Select>
+              <Select value={paymentFilter} onValueChange={(value) => setPaymentFilter(value as 'all' | OrderPaymentStatus)}>
+                <SelectTrigger className="w-[180px]"><SelectValue placeholder="Pagamento" /></SelectTrigger>
+                <SelectContent><SelectItem value="all">Todos os pagamentos</SelectItem><SelectItem value="pending">Pagamento pendente</SelectItem><SelectItem value="partial">Pagamento parcial</SelectItem><SelectItem value="paid">Pagamento pago</SelectItem></SelectContent>
+              </Select>
+              <Select value={deliveryFilter} onValueChange={setDeliveryFilter}>
+                <SelectTrigger className="w-[165px]"><SelectValue placeholder="Atendimento" /></SelectTrigger>
+                <SelectContent><SelectItem value="all">Entrega e retirada</SelectItem><SelectItem value="entrega">Entrega</SelectItem><SelectItem value="retirada">Retirada</SelectItem></SelectContent>
+              </Select>
+              </div>
+              <div className="flex rounded-md border p-1" aria-label="Formato de visualização">
+                <Button size="sm" variant={viewMode === 'list' ? 'secondary' : 'ghost'} onClick={() => setViewMode('list')} aria-pressed={viewMode === 'list'}><LayoutList className="mr-2 h-4 w-4" />Lista</Button>
+                <Button size="sm" variant={viewMode === 'kanban' ? 'secondary' : 'ghost'} onClick={() => setViewMode('kanban')} aria-pressed={viewMode === 'kanban'}><Columns3 className="mr-2 h-4 w-4" />Kanban</Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent>
             {isLoading ? (
               <p className="text-muted-foreground">Carregando...</p>
-            ) : (
+            ) : viewMode === 'list' ? (
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -270,17 +293,8 @@ export default function Orders() {
                     <OrderRow 
                       key={order.id} 
                       order={order}
-                      onViewDetails={(order) => {
-                        setSelectedOrder(order);
-                        setDetailsDialogOpen(true);
-                      }}
-                      onAddPayment={(order) => {
-                        setSelectedOrder(order);
-                        const remaining = Number(order.total);
-                        setPaymentAmount(remaining);
-                        setSelectedMethodId('');
-                        setPaymentDialogOpen(true);
-                      }}
+                      onViewDetails={openDetails}
+                      onAddPayment={openPayment}
                       onEdit={(order) => {
                         setSelectedOrder(order);
                         setEditDialogOpen(true);
@@ -296,7 +310,12 @@ export default function Orders() {
                   ))}
                 </TableBody>
               </Table>
+            ) : (
+              <div className="overflow-x-auto">
+                <OrdersKanban orders={filteredOrders ?? []} onView={openDetails} onPayment={openPayment} onEquipmentOut={handleEquipmentOut} onReturn={handleReturn} />
+              </div>
             )}
+            {!isLoading && !filteredOrders?.length && <p className="py-8 text-center text-sm text-muted-foreground">Nenhum pedido encontrado com os filtros selecionados.</p>}
           </CardContent>
         </Card>
 

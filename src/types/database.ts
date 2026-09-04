@@ -132,6 +132,7 @@ export interface Order {
   customers?: Customer;
   taps?: Tap;
   cylinders?: Cylinder;
+  payments?: Payment[];
 }
 
 export interface OrderItem {

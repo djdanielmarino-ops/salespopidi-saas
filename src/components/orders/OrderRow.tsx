@@ -1,13 +1,12 @@
-import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { TableCell, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Order, Payment, OrderItem } from '@/types/database';
+import { Order } from '@/types/database';
 import { Phone, CreditCard, Eye, AlertCircle, Truck, Store, LogOut, LogIn } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { supabase } from '@/integrations/supabase/client';
+import { getOrderPaidAmount, getOrderPaymentStatus } from '@/lib/orderPaymentStatus';
 
 
 const statusLabels: Record<string, string> = {
@@ -35,28 +34,10 @@ interface OrderRowProps {
 }
 
 export function OrderRow({ order, onViewDetails, onAddPayment, onEdit, onEquipmentOut, onReturn, onDelete }: OrderRowProps) {
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [items, setItems] = useState<OrderItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchPaymentsAndItems = async () => {
-      const [paymentsResult, itemsResult] = await Promise.all([
-        supabase.from('payments').select('*').eq('order_id', order.id),
-        supabase.from('order_items').select('*, beer_types(*), barrel_models(*)').eq('order_id', order.id)
-      ]);
-      
-      if (paymentsResult.data) setPayments(paymentsResult.data as Payment[]);
-      if (itemsResult.data) setItems(itemsResult.data as OrderItem[]);
-      setIsLoading(false);
-    };
-
-    fetchPaymentsAndItems();
-  }, [order.id]);
-
-  const totalPaid = payments.reduce((sum, p) => sum + Number(p.amount), 0);
-  const isPaid = totalPaid >= Number(order.total);
-  const hasPartialPayment = totalPaid > 0 && totalPaid < Number(order.total);
+  const totalPaid = getOrderPaidAmount(order.payments);
+  const paymentStatus = getOrderPaymentStatus(order);
+  const isPaid = paymentStatus === 'paid';
+  const hasPartialPayment = paymentStatus === 'partial';
 
 
 
