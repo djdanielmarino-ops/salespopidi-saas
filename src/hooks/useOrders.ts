@@ -263,7 +263,7 @@ export function useUpdateOrderStatus() {
   const deliverCylinderToCustomer = useDeliverCylinderToCustomer();
   
   return useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: OrderStatus }) => {
+    mutationFn: async ({ id, status, finalizeOnDispatch = false }: { id: string; status: OrderStatus; finalizeOnDispatch?: boolean }) => {
       const { data: currentOrder, error: currentOrderError } = await supabase
         .from('orders')
         .select('status, tap_id, cylinder_model_id, cylinder_quantity')
@@ -353,9 +353,13 @@ export function useUpdateOrderStatus() {
         }
       }
       
+      const nextStatus = status === 'em_andamento' && finalizeOnDispatch
+        ? 'finalizado' as OrderStatus
+        : status;
+
       const { data, error } = await supabase
         .from('orders')
-        .update({ status })
+        .update({ status: nextStatus })
         .eq('id', id)
         .select()
         .single();

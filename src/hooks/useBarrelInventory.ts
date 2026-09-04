@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { BarrelStatus } from '@/types/database';
 import { toast } from 'sonner';
 import { buildBarrelDailySummary, formatBarrelSummaryMessage } from '@/lib/barrelDailySummary';
+import { useTenant } from '@/contexts/TenantContext';
 
 export interface BarrelModel {
   id: string;
@@ -493,6 +494,7 @@ export function useReturnFromCustomer() {
 }
 
 export function useSendDailyBarrelSummary() {
+  const { organization } = useTenant();
   return useMutation({
     mutationFn: async () => {
       const now = new Date();
@@ -517,6 +519,7 @@ export function useSendDailyBarrelSummary() {
           .reduce((total, item) => total + item.quantity, 0),
       })), movements || []);
       const payload = {
+        organization_id: organization?.id,
         event: 'barrel_brewery_daily_summary',
         date: now.toLocaleDateString('en-CA'),
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,

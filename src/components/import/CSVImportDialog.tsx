@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import { sanitizeDbError } from '@/lib/errorSanitizer';
+import { customerRowForInsert, decodeCsv, normalizeCustomerRow, parseCsv } from '@/lib/csvImport';
 
 type ImportType = 'customers' | 'cylinders' | 'taps' | 'beer_types';
 
@@ -40,20 +41,10 @@ const csvTemplates: Record<ImportType, { headers: string; example: string }> = {
   },
 };
 
-// Sanitize cell values to prevent formula injection
-function sanitizeCell(value: string): string {
-  const trimmed = value.trim();
-  // Remove formula injection prefixes
-  if (/^[=+\-@\t\r]/.test(trimmed)) {
-    return trimmed.replace(/^[=+\-@\t\r]+/, '');
-  }
-  return trimmed;
-}
-
 // Zod schemas for each import type
 const customerSchema = z.object({
   full_name: z.string().min(1, 'Nome é obrigatório').max(255),
-  phone: z.string().min(1, 'Telefone é obrigatório').max(30),
+  phone: z.string().max(30),
   email: z.string().email('Email inválido').max(255).optional().or(z.literal('')),
   cpf: z.string().max(20).optional().or(z.literal('')),
   rg: z.string().max(20).optional().or(z.literal('')),
@@ -113,25 +104,6 @@ export function CSVImportDialog() {
     URL.revokeObjectURL(url);
   };
 
-  const parseCSV = (text: string): Record<string, string>[] => {
-    const lines = text.split('\n').filter(line => line.trim());
-    if (lines.length < 2) return [];
-    
-    const headers = lines[0].split(',').map(h => h.trim());
-    const rows: Record<string, string>[] = [];
-    
-    for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(',').map(v => sanitizeCell(v));
-      const row: Record<string, string> = {};
-      headers.forEach((header, index) => {
-        row[sanitizeCell(header)] = values[index] || '';
-      });
-      rows.push(row);
-    }
-    
-    return rows;
-  };
-
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -139,8 +111,9 @@ export function CSVImportDialog() {
     setIsImporting(true);
     
     try {
-      const text = await file.text();
-      const rows = parseCSV(text);
+      const text = decodeCsv(await file.arrayBuffer());
+      const parsedRows = parseCsv(text);
+      const rows = importType === 'customers' ? parsedRows.map(normalizeCustomerRow) : parsedRows;
       
       if (rows.length === 0) {
         toast.error('Arquivo CSV vazio ou inválido');
@@ -181,7 +154,8 @@ export function CSVImportDialog() {
 
       for (const row of validRows) {
         try {
-          const { error } = await supabase.from(importType).insert([row] as any);
+          const dbRow = importType === 'customers' ? customerRowForInsert(row) : row;
+          const { error } = await supabase.from(importType).insert([dbRow] as any);
           if (error) {
             console.error('Erro na importação:', sanitizeDbError(error));
             errorCount++;

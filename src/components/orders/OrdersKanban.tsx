@@ -26,9 +26,10 @@ type Props = {
   onPayment: (order: Order) => void;
   onEquipmentOut: (orderId: string) => void;
   onReturn: (orderId: string) => void;
+  isBrewery?: boolean;
 };
 
-export function OrdersKanban({ orders, onView, onPayment, onEquipmentOut, onReturn }: Props) {
+export function OrdersKanban({ orders, onView, onPayment, onEquipmentOut, onReturn, isBrewery = false }: Props) {
   return <div className="grid min-w-[1050px] grid-cols-4 gap-4 overflow-x-auto pb-2">
     {columns.map((column) => {
       const columnOrders = orders.filter((order) => order.status === column.status);
@@ -56,8 +57,8 @@ export function OrdersKanban({ orders, onView, onPayment, onEquipmentOut, onRetu
                 <div className="flex flex-wrap gap-1 border-t pt-3">
                   <Button size="sm" variant="ghost" onClick={() => onView(order)}><Eye className="mr-1 h-4 w-4" />Detalhes</Button>
                   {order.status !== 'cancelado' && <Button size="sm" variant="ghost" onClick={() => onPayment(order)}><CreditCard className="mr-1 h-4 w-4" />Pagamento</Button>}
-                  {order.status === 'agendado' && <Button size="sm" variant="ghost" className="text-green-700" onClick={() => onEquipmentOut(order.id)}><LogOut className="mr-1 h-4 w-4" />Saída</Button>}
-                  {order.status === 'em_andamento' && <Button size="sm" variant="ghost" className="text-blue-700" onClick={() => onReturn(order.id)}><LogIn className="mr-1 h-4 w-4" />Entrada</Button>}
+                  {order.status === 'agendado' && <Button size="sm" variant="ghost" className="text-green-700" onClick={() => onEquipmentOut(order.id)}><LogOut className="mr-1 h-4 w-4" />{isBrewery ? 'Expedir' : 'Saída'}</Button>}
+                  {!isBrewery && order.status === 'em_andamento' && <Button size="sm" variant="ghost" className="text-blue-700" onClick={() => onReturn(order.id)}><LogIn className="mr-1 h-4 w-4" />Entrada</Button>}
                 </div>
               </CardContent>
             </Card>;

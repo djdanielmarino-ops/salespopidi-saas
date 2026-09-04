@@ -26,9 +26,12 @@ import { CustomerPendingOrder, fetchCustomerPendingOrders } from '@/lib/customer
 import { toast } from 'sonner';
 import { getOrderPaidAmount, getOrderPaymentStatus, OrderPaymentStatus } from '@/lib/orderPaymentStatus';
 import { OrdersKanban } from '@/components/orders/OrdersKanban';
+import { useTenant } from '@/contexts/TenantContext';
 
 
 export default function Orders() {
+  const { organization } = useTenant();
+  const isBrewery = organization?.organization_type === 'brewery';
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [paymentFilter, setPaymentFilter] = useState<'all' | OrderPaymentStatus>('all');
@@ -102,7 +105,7 @@ export default function Orders() {
         tap: order.taps?.code || null,
         cylinder: order.cylinders?.code || null,
         total: order.total,
-        status: action === 'saida' ? 'em_andamento' : 'finalizado',
+        status: action === 'saida' && !isBrewery ? 'em_andamento' : 'finalizado',
         timestamp: new Date().toISOString(),
       };
       await supabase.functions.invoke('send-webhook', { body: payload });
@@ -165,7 +168,11 @@ export default function Orders() {
   };
 
   const confirmEquipmentOut = async (order: Order) => {
-    await updateOrderStatus.mutateAsync({ id: order.id, status: 'em_andamento' as OrderStatus });
+    await updateOrderStatus.mutateAsync({
+      id: order.id,
+      status: 'em_andamento' as OrderStatus,
+      finalizeOnDispatch: isBrewery,
+    });
     await sendWebhook(order, 'saida');
     setPendingDialogOpen(false);
     setPendingEquipmentOutOrder(null);
@@ -187,7 +194,10 @@ export default function Orders() {
       toast.warning('Não foi possível verificar as pendências financeiras do cliente.');
     }
 
-    if (confirm('Confirmar saída dos equipamentos?')) await confirmEquipmentOut(order);
+    const confirmation = isBrewery
+      ? 'Confirmar expedição e concluir esta venda? O retorno dos barris será controlado separadamente pelo estoque.'
+      : 'Confirmar saída dos equipamentos?';
+    if (confirm(confirmation)) await confirmEquipmentOut(order);
   };
 
   const handlePayment = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -306,13 +316,14 @@ export default function Orders() {
                           await deleteOrder.mutateAsync(orderId);
                         }
                       }}
+                      isBrewery={isBrewery}
                     />
                   ))}
                 </TableBody>
               </Table>
             ) : (
               <div className="overflow-x-auto">
-                <OrdersKanban orders={filteredOrders ?? []} onView={openDetails} onPayment={openPayment} onEquipmentOut={handleEquipmentOut} onReturn={handleReturn} />
+                <OrdersKanban orders={filteredOrders ?? []} onView={openDetails} onPayment={openPayment} onEquipmentOut={handleEquipmentOut} onReturn={handleReturn} isBrewery={isBrewery} />
               </div>
             )}
             {!isLoading && !filteredOrders?.length && <p className="py-8 text-center text-sm text-muted-foreground">Nenhum pedido encontrado com os filtros selecionados.</p>}

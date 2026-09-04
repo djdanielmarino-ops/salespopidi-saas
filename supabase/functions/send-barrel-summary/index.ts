@@ -1,39 +1,35 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient } from 'npm:@supabase/supabase-js@2'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
-const respond = (body: unknown, status: number) => new Response(JSON.stringify(body), {
-  status, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-})
+const cors={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, x-client-info, apikey, content-type','Content-Type':'application/json'}
+const reply=(status:number,body:unknown)=>new Response(JSON.stringify(body),{status,headers:cors})
 
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
-  if (req.method !== 'POST') return respond({ success: false, error: 'Method not allowed' }, 405)
-  try {
-    const authorization = req.headers.get('Authorization')
-    if (!authorization) return respond({ success: false, error: 'Missing authorization' }, 401)
-    const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, {
-      global: { headers: { Authorization: authorization } },
-    })
-    const { data: { user }, error } = await supabase.auth.getUser()
-    if (error || !user) return respond({ success: false, error: 'Unauthorized' }, 401)
-
-    const payload = await req.json()
-    if (!payload?.date || !Array.isArray(payload?.barrels) || !payload?.message) {
-      return respond({ success: false, error: 'Invalid summary payload' }, 400)
-    }
-
-    const result = await fetch('https://n8n.popidichopp.online/webhook/controlebarrischopp', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...payload, sentBy: user.id }),
-    })
-    if (!result.ok) {
-      return respond({ success: false, error: 'Webhook rejected the summary', status: result.status, detail: (await result.text()).slice(0, 500) }, 502)
-    }
-    return respond({ success: true, status: result.status }, 200)
-  } catch (error) {
-    return respond({ success: false, error: error instanceof Error ? error.message : 'Internal error' }, 500)
-  }
+Deno.serve(async(req)=>{
+ if(req.method==='OPTIONS')return new Response('ok',{headers:cors})
+ if(req.method!=='POST')return reply(405,{success:false,error:'Método não permitido.'})
+ try{
+  const auth=req.headers.get('Authorization')||''
+  const base=Deno.env.get('SUPABASE_URL')!
+  const userDb=createClient(base,Deno.env.get('SUPABASE_ANON_KEY')!,{global:{headers:{Authorization:auth}}})
+  const {data:{user}}=await userDb.auth.getUser()
+  if(!user)return reply(401,{success:false,error:'Sessão inválida.'})
+  const payload=await req.json()
+  const organizationId=String(payload.organization_id||'')
+  if(!organizationId||!payload.date||!Array.isArray(payload.barrels)||!payload.message)return reply(400,{success:false,error:'Resumo inválido.'})
+  const admin=createClient(base,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
+  const [{data:member},{data:platform}]=await Promise.all([
+   admin.from('organization_members').select('status').eq('organization_id',organizationId).eq('user_id',user.id).maybeSingle(),
+   admin.from('platform_admins').select('is_active').eq('user_id',user.id).maybeSingle(),
+  ])
+  if(member?.status!=='active'&&!platform?.is_active)return reply(403,{success:false,error:'Sem acesso à empresa.'})
+  const {data:endpoint}=await admin.from('webhook_endpoints').select('url,timeout_ms').eq('organization_id',organizationId)
+   .eq('endpoint_key','barrels_daily_summary').eq('environment','production').eq('is_active',true).maybeSingle()
+  if(!endpoint)return reply(404,{success:false,error:'Webhook de resumo de barris não configurado.'})
+  const controller=new AbortController()
+  const timer=setTimeout(()=>controller.abort(),endpoint.timeout_ms)
+  let response:Response
+  try{response=await fetch(endpoint.url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...payload,sentBy:user.id}),signal:controller.signal})}
+  finally{clearTimeout(timer)}
+  if(!response.ok)return reply(502,{success:false,error:`Webhook respondeu HTTP ${response.status}.`})
+  return reply(200,{success:true,status:response.status})
+ }catch(error){return reply(500,{success:false,error:error instanceof Error?error.message:'Erro interno.'})}
 })

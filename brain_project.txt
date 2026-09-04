@@ -1,0 +1,193 @@
+PROJETO FUTURO - CENTRAL MASTER DE APIS, WEBHOOKS E INTEGRACOES
+Atualizado em: 04/09/2026
+
+OBJETIVO
+
+Criar no painel Master uma Central Administrativa de APIs, webhooks e integracoes,
+separada das configuracoes operacionais das lojas.
+
+O Master devera selecionar uma empresa e configurar, testar, acompanhar, pausar e
+corrigir as integracoes daquela organizacao. Cada empresa podera usar URLs,
+credenciais, fornecedores e automacoes diferentes, sem compartilhar dados ou
+segredos com outras empresas.
+
+LOCAL PREVISTO
+
+Master > Configuracoes > APIs e Webhooks
+
+A pagina devera permitir:
+
+- selecionar a empresa;
+- visualizar, criar e editar integracoes;
+- ativar ou pausar uma integracao;
+- separar teste e producao;
+- testar conexoes;
+- consultar ultimo sucesso, ultimo erro, eventos e tentativas;
+- reenviar eventos com falha;
+- rotacionar segredos;
+- acompanhar a saude das integracoes por empresa.
+
+No futuro, administradores das lojas poderao receber uma versao limitada dessa
+pagina, conforme permissoes definidas pelo Master.
+
+INTEGRACOES INICIAIS PREVISTAS
+
+- pedidos de clientes;
+- envio de pedido de compra para cervejaria ou fornecedor;
+- aceite, confirmacao, liberacao e expedicao pela cervejaria;
+- emissao e retorno de nota fiscal;
+- envio e recebimento de barris pela cervejaria;
+- expedicao e recebimento fisico de barris ou mercadorias pela loja;
+- resumo diario de pedidos;
+- resumo de movimentacao e posicao de barris;
+- avisos financeiros e cobrancas;
+- automacoes de mensagens;
+- futuras integracoes com ERP, pagamentos, e-mail e suporte.
+
+TIPOS DE WEBHOOK
+
+1. Saida do SaaS
+
+O Sales Popidi envia um evento para outro sistema:
+
+Sales Popidi > backend/Edge Function > webhook do n8n > sistema de destino.
+
+Configuracoes: URL de producao e teste, eventos enviados, timeout, tentativas,
+status ativo/inativo e referencia segura do segredo de assinatura.
+
+Exemplos de eventos: order.created, order.dispatched, order.completed,
+barrel.sent_to_brewery, brewery_order.created, brewery_order.received,
+invoice.requested e payment.overdue.
+
+2. Entrada no SaaS
+
+O n8n, a cervejaria, um ERP ou outro servico chama o Sales Popidi:
+
+Cervejaria/n8n > endpoint do Sales Popidi > validacao > atualizacao do pedido
+ou estoque.
+
+A tela devera mostrar a URL para copiar, eventos aceitos, formato do payload,
+autenticacao/assinatura, exemplo de requisicao e ultimo resultado processado.
+
+ONBOARDING
+
+As integracoes poderao fazer parte do onboarding, mas essa etapa sera opcional
+e editavel posteriormente.
+
+Fluxo sugerido:
+
+1. Criar a empresa.
+2. Criar a unidade principal.
+3. Escolher os modulos contratados.
+4. Criar proprietario, administradores e funcionarios.
+5. Importar os dados iniciais.
+6. Configurar APIs e webhooks necessarios.
+7. Testar as conexoes.
+8. Ativar a operacao.
+
+A falta de uma integracao opcional nao deve impedir a criacao da empresa. O
+onboarding devera indicar configuracoes concluidas, pendentes ou com erro.
+
+ISOLAMENTO POR EMPRESA
+
+Toda integracao devera pertencer obrigatoriamente a uma organization_id e,
+quando necessario, a uma unit_id. Uma empresa nao podera visualizar, usar ou
+alterar integracoes de outra empresa.
+
+Estruturas ja previstas no banco:
+
+- integration_connections: conexao/provedor por empresa;
+- webhook_endpoints: URLs de saida e regras;
+- integration_events: eventos recebidos e enviados;
+- webhook_deliveries: tentativas e respostas;
+- message_automations: regras futuras de mensagens;
+- message_deliveries: historico futuro das mensagens;
+- audit_logs: alteracoes administrativas.
+
+SEGURANCA E CONFIABILIDADE
+
+- Nunca expor service_role, tokens ou segredos no frontend.
+- Guardar no banco apenas referencias seguras aos segredos.
+- Assinar payloads com HMAC.
+- Usar event_id e chave de idempotencia para evitar duplicidade.
+- Implementar timeout, repeticao com backoff e fila de falhas.
+- Mascarar dados sensiveis nos logs.
+- Aplicar RLS e autorizacao por organizacao.
+- Registrar quem criou, alterou, pausou, testou ou removeu uma integracao.
+- Permitir URLs distintas para homologacao e producao.
+
+SITUACAO ATUAL DO PROJETO
+
+- Alguns webhooks do n8n ainda estao fixos no codigo.
+- Outras integracoes usam secrets globais do Supabase.
+- Ainda nao existe tela para configurar webhooks por empresa.
+- O envio de pedido para a cervejaria e o webhook de retorno ja possuem uma
+  implementacao inicial.
+- O recebimento fisico continua sendo confirmado manualmente no sistema para
+  evitar entrada de estoque apenas por notificacao eletronica.
+- Existem tabelas iniciais para conexoes, endpoints, eventos, entregas, mensagens
+  e auditoria, mas os fluxos antigos ainda precisam ser migrados para elas.
+- A futura implementacao devera eliminar URLs globais/fixas e resolver a conexao
+  correta a partir da empresa do evento.
+
+WHATSAPP
+
+O WhatsApp sera definido em uma etapa posterior. A central devera ficar preparada
+para a categoria de mensagens, sem escolher agora entre WAHA, API oficial da Meta
+ou outro provedor.
+
+Quando implementado:
+
+- cada organizacao devera conectar o proprio numero;
+- sessoes e tokens nao poderao ser compartilhados;
+- deverao existir consentimento, opt-out e regras de horario;
+- envios deverao registrar fila, tentativa, envio, entrega, leitura e falha;
+- as automacoes deverao poder ser pausadas sem desconectar o numero.
+
+CRITERIOS DE ACEITE FUTUROS
+
+- Empresa A nunca usa ou visualiza a integracao da Empresa B.
+- O Master consegue configurar e testar integracoes sem editar codigo.
+- O onboarding indica claramente integracoes pendentes e concluidas.
+- Eventos repetidos nao geram operacoes duplicadas.
+- Falhas ficam registradas e podem ser reenviadas.
+- Segredos nunca aparecem no navegador ou nos logs.
+- Recebimento eletronico e recebimento fisico possuem estados claros.
+- Trocar de provedor nao exige reescrever os modulos de pedidos e estoque.
+- Todas as alteracoes administrativas ficam registradas em auditoria.
+
+AVANCO - HISTORICO E REENVIO
+
+- A Central Master lista os ultimos 50 eventos de cada empresa.
+- Cada evento mostra tipo, data, situacao, tentativa e resposta HTTP.
+- Falhas podem ser reenviadas manualmente pelo Master.
+- O reenvio respeita o maximo de tentativas configurado no endpoint.
+- O mesmo event_id e payload sao preservados para manter a idempotencia.
+- Ao atingir o limite, o evento passa para dead_letter.
+- Cada reenvio gera registro em audit_logs.
+
+OBSERVACAO
+
+Este arquivo registra decisoes e requisitos para uma implementacao futura. Antes
+de iniciar o projeto, revisar o estado atual do banco, das Edge Functions, do n8n
+e da documentacao oficial do Supabase. A implantacao devera ser testada primeiro
+em homologacao.
+
+ANDAMENTO - 04/09/2026
+
+Primeira etapa iniciada:
+
+- criada a rota Master > APIs e Webhooks;
+- criada selecao de empresa;
+- implementado cadastro, edicao, pausa, exclusao e teste de endpoints;
+- endpoints separados por empresa e ambiente;
+- acesso restrito ao platform_owner;
+- alteracoes e testes registrados em audit_logs;
+- URLs antigas de pedidos e resumo de barris migradas para a empresa Popidi;
+- envio de pedidos, resumo de barris e pedidos para cervejaria alterados para
+  resolver o endpoint configurado pela organization_id;
+- integration_events e webhook_deliveries usados para registrar o envio de
+  pedidos e pedidos para cervejaria;
+- migracao aplicada ao Supabase e funcoes publicadas;
+- falta cadastrar na nova tela a URL real de pedidos para cervejaria;
+- WhatsApp e webhooks de entrada permanecem para as proximas etapas.

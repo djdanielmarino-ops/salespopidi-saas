@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Building2, CircleDollarSign, Plus, ShieldCheck, Users } from 'lucide-react';
+import { Building2, CircleDollarSign, Link2, Plus, ShieldCheck, Users } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Badge } from '@/components/ui/badge';
@@ -135,6 +136,8 @@ export default function Master() {
             <h1 className="text-3xl font-bold">Painel Master</h1>
             <p className="text-muted-foreground">Gestão global das organizações do Sales Popidi.</p>
           </div>
+          <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline"><Link to="/master/integrations"><Link2 className="mr-2 h-4 w-4" />APIs e Webhooks</Link></Button>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild><Button><Plus className="mr-2 h-4 w-4" />Nova organização</Button></DialogTrigger>
             <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
@@ -177,6 +180,7 @@ export default function Master() {
               </form>
             </DialogContent>
           </Dialog>
+          </div>
         </header>
 
         <section className="grid gap-4 md:grid-cols-3">

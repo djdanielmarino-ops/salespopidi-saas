@@ -10,6 +10,7 @@ export type ActiveOrganization = {
   trade_name: string | null;
   status: string;
   timezone: string;
+  organization_type: 'store' | 'distributor' | 'brewery' | 'hybrid';
 };
 
 type TenantError = 'missing_subdomain' | 'not_found_or_forbidden' | 'load_failed' | null;
@@ -69,7 +70,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
 
     (supabase as unknown as OrganizationLookup)
       .from('organizations')
-      .select('id, slug, legal_name, trade_name, status, timezone')
+      .select('id, slug, legal_name, trade_name, status, timezone, organization_type')
       .eq('slug', resolution.slug)
       .maybeSingle()
       .then(({ data, error: queryError }: { data: ActiveOrganization | null; error: unknown }) => {

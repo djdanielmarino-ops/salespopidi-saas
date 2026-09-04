@@ -31,9 +31,10 @@ interface OrderRowProps {
   onEquipmentOut: (orderId: string) => void;
   onReturn: (orderId: string) => void;
   onDelete: (orderId: string) => void;
+  isBrewery?: boolean;
 }
 
-export function OrderRow({ order, onViewDetails, onAddPayment, onEdit, onEquipmentOut, onReturn, onDelete }: OrderRowProps) {
+export function OrderRow({ order, onViewDetails, onAddPayment, onEdit, onEquipmentOut, onReturn, onDelete, isBrewery = false }: OrderRowProps) {
   const totalPaid = getOrderPaidAmount(order.payments);
   const paymentStatus = getOrderPaymentStatus(order);
   const isPaid = paymentStatus === 'paid';
@@ -160,12 +161,12 @@ export function OrderRow({ order, onViewDetails, onAddPayment, onEdit, onEquipme
                     <LogOut className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Saída do equipamento</TooltipContent>
+                <TooltipContent>{isBrewery ? 'Expedir e concluir venda' : 'Saída do equipamento'}</TooltipContent>
               </Tooltip>
             </TooltipProvider>
           )}
 
-          {order.status === 'em_andamento' && (
+          {!isBrewery && order.status === 'em_andamento' && (
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>

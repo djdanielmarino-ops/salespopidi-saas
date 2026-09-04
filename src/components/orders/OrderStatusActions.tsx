@@ -16,6 +16,7 @@ import { OrderItem, OrderStatus } from '@/types/database';
 import { CustomerFinancialPendingDialog } from '@/components/orders/CustomerFinancialPendingDialog';
 import { CustomerPendingOrder, fetchCustomerPendingOrders } from '@/lib/customerFinancialPending';
 import { toast } from 'sonner';
+import { useTenant } from '@/contexts/TenantContext';
 
 interface OrderStatusActionsOrder {
   id: string;
@@ -36,6 +37,8 @@ interface OrderStatusActionsProps {
 }
 
 export function OrderStatusActions({ order, className }: OrderStatusActionsProps) {
+  const { organization } = useTenant();
+  const isBrewery = organization?.organization_type === 'brewery';
   const [consignedDialogOpen, setConsignedDialogOpen] = useState(false);
   const [consignedItems, setConsignedItems] = useState<OrderItem[]>([]);
   const [consumedByItem, setConsumedByItem] = useState<Record<string, number>>({});
@@ -59,7 +62,7 @@ export function OrderStatusActions({ order, className }: OrderStatusActionsProps
           tap: order.taps?.code || null,
           cylinder: order.cylinders?.code || null,
           total: order.total,
-          status: action === 'saida' ? 'em_andamento' : 'finalizado',
+          status: action === 'saida' && !isBrewery ? 'em_andamento' : 'finalizado',
           timestamp: new Date().toISOString(),
         },
       });
@@ -69,7 +72,11 @@ export function OrderStatusActions({ order, className }: OrderStatusActionsProps
   };
 
   const confirmEquipmentOut = async () => {
-    await updateOrderStatus.mutateAsync({ id: order.id, status: 'em_andamento' as OrderStatus });
+    await updateOrderStatus.mutateAsync({
+      id: order.id,
+      status: 'em_andamento' as OrderStatus,
+      finalizeOnDispatch: isBrewery,
+    });
     await sendWebhook('saida');
     setPendingDialogOpen(false);
   };
@@ -86,7 +93,10 @@ export function OrderStatusActions({ order, className }: OrderStatusActionsProps
       toast.warning('Não foi possível verificar as pendências financeiras do cliente.');
     }
 
-    if (!confirm('Confirmar saída dos equipamentos?')) return;
+    const confirmation = isBrewery
+      ? 'Confirmar expedição e concluir esta venda? O retorno dos barris será controlado separadamente pelo estoque.'
+      : 'Confirmar saída dos equipamentos?';
+    if (!confirm(confirmation)) return;
     await confirmEquipmentOut();
   };
 
@@ -147,9 +157,9 @@ export function OrderStatusActions({ order, className }: OrderStatusActionsProps
           disabled={updateOrderStatus.isPending}
         >
           <LogOut className="h-4 w-4 mr-2" />
-          Saída do equipamento
+          {isBrewery ? 'Expedir e concluir venda' : 'Saída do equipamento'}
         </Button>
-      ) : (
+      ) : !isBrewery ? (
         <Button
           variant="outline"
           className={className}
@@ -159,7 +169,7 @@ export function OrderStatusActions({ order, className }: OrderStatusActionsProps
           <LogIn className="h-4 w-4 mr-2" />
           Entrada do equipamento
         </Button>
-      )}
+      ) : null}
 
       <Dialog open={consignedDialogOpen} onOpenChange={setConsignedDialogOpen}>
         <DialogContent className="max-w-2xl">

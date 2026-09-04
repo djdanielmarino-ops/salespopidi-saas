@@ -30,6 +30,7 @@ import { TenantProvider } from "@/contexts/TenantContext";
 import { TenantGuard } from "@/components/auth/TenantGuard";
 import { PlatformGuard } from "@/components/auth/PlatformGuard";
 import Master from "./pages/Master";
+import MasterIntegrations from "./pages/MasterIntegrations";
 
 const queryClient = new QueryClient();
 
@@ -52,6 +53,7 @@ const App = () => (
 
           <Route path="/.lovable/oauth/consent" element={<OAuthConsent />} />
           <Route path="/master" element={<AuthGuard><PlatformGuard><Master /></PlatformGuard></AuthGuard>} />
+          <Route path="/master/integrations" element={<AuthGuard><PlatformGuard><MasterIntegrations /></PlatformGuard></AuthGuard>} />
           <Route path="/" element={<Protected><PermissionGuard module="dashboard"><Dashboard /></PermissionGuard></Protected>} />
           <Route path="/customers" element={<Protected><PermissionGuard module="customers"><Customers /></PermissionGuard></Protected>} />
           <Route path="/orders/new" element={<Protected><PermissionGuard module="orders" action="manage"><NewOrder /></PermissionGuard></Protected>} />
