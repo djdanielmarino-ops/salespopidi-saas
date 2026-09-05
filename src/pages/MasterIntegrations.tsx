@@ -40,16 +40,18 @@ const endpointOptions = [
   ['nfe_issue', '3. Emissão de NFe'],
   ['daily_orders', '4. Pedidos diários'],
   ['brewery_orders_send', '5. Compras / Fornecedor'],
+  ['brewery_order_receive', '6. Recebimento de pedido'],
+  ['order_form_receive', '7. Formulário'],
 ] as const;
 
 const integrationCatalog = [
-  { number: 1, name: 'Controle de barris', direction: 'Saída', key: 'barrels_daily_summary', description: 'Envia ao n8n a atualização e o resumo do estoque de barris.', available: true },
-  { number: 2, name: 'Automação de mensagens', direction: 'Saída', key: 'orders_automation', description: 'Dispara no status de saída e entrada dos equipamentos.', available: true },
-  { number: 3, name: 'Emissão de NFe', direction: 'Saída', key: 'nfe_issue', description: 'Envia cliente, itens e valores para emissão fiscal.', available: false },
-  { number: 4, name: 'Pedidos diários', direction: 'Saída', key: 'daily_orders', description: 'Envia o resumo dos pedidos da empresa no dia.', available: false },
-  { number: 5, name: 'Compras / Fornecedor', direction: 'Saída', key: 'brewery_orders_send', description: 'Envia à cervejaria o pedido solicitado pela loja.', available: true },
-  { number: 6, name: 'Recebimento de pedido', direction: 'Entrada', key: 'brewery_order_receive', description: 'Recebe aceite, faturamento e expedição; a loja confirma a entrega física.', available: false },
-  { number: 7, name: 'Formulário', direction: 'Entrada', key: 'order_form_receive', description: 'Recebe do n8n um novo pedido originado pelo formulário.', available: false },
+  { number: 1, name: 'Controle de barris', direction: 'Saída', key: 'barrels_daily_summary', description: 'Envia ao n8n a atualização e o resumo do estoque de barris.' },
+  { number: 2, name: 'Automação de mensagens', direction: 'Saída', key: 'orders_automation', description: 'Dispara no status de saída e entrada dos equipamentos.' },
+  { number: 3, name: 'Emissão de NFe', direction: 'Saída', key: 'nfe_issue', description: 'Envia cliente, itens e valores para emissão fiscal.' },
+  { number: 4, name: 'Pedidos diários', direction: 'Saída', key: 'daily_orders', description: 'Envia o resumo dos pedidos da empresa no dia.' },
+  { number: 5, name: 'Compras / Fornecedor', direction: 'Saída', key: 'brewery_orders_send', description: 'Envia à cervejaria o pedido solicitado pela loja.' },
+  { number: 6, name: 'Recebimento de pedido', direction: 'Entrada', key: 'brewery_order_receive', description: 'Recebe aceite, faturamento e expedição; a loja confirma a entrega física.' },
+  { number: 7, name: 'Formulário', direction: 'Entrada', key: 'order_form_receive', description: 'Recebe do n8n um novo pedido originado pelo formulário.' },
 ] as const;
 
 async function invoke(body: Record<string, unknown>) {
@@ -141,6 +143,10 @@ export default function MasterIntegrations() {
   });
 
   const openCreate = () => { setForm(emptyForm); setDialogOpen(true); };
+  const openCreateFor = (endpointKey: string, name: string) => {
+    setForm({ ...emptyForm, endpoint_key: endpointKey, name: `${name} - n8n` });
+    setDialogOpen(true);
+  };
   const openEdit = (endpoint: Endpoint) => {
     setForm({
       id: endpoint.id, name: endpoint.name, endpoint_key: endpoint.endpoint_key, url: endpoint.url,
@@ -214,19 +220,27 @@ export default function MasterIntegrations() {
           <CardHeader><CardTitle>Catálogo de integrações</CardTitle><CardDescription>Os sete fluxos oficiais previstos para todas as categorias de empresa.</CardDescription></CardHeader>
           <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {integrationCatalog.map((item) => {
-              const configured = endpointsQuery.data?.some((endpoint) => endpoint.endpoint_key === item.key && endpoint.is_active);
-              return <div key={item.number} className="rounded-lg border p-4">
+              const configuredEndpoint = endpointsQuery.data?.find((endpoint) => endpoint.endpoint_key === item.key && endpoint.environment === 'production')
+                || endpointsQuery.data?.find((endpoint) => endpoint.endpoint_key === item.key);
+              const configured = Boolean(configuredEndpoint?.is_active);
+              return <button
+                key={item.number}
+                type="button"
+                className="rounded-lg border p-4 text-left transition-colors hover:border-primary hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                onClick={() => configuredEndpoint ? openEdit(configuredEndpoint) : openCreateFor(item.key, item.name)}
+                disabled={!organizationId}
+                aria-label={`${configuredEndpoint ? 'Editar' : 'Cadastrar'} webhook: ${item.name}`}
+              >
                 <div className="mb-2 flex items-start justify-between gap-2">
                   <div className="font-medium">{item.number}. {item.name}</div>
                   <Badge variant={item.direction === 'Entrada' ? 'secondary' : 'outline'}>{item.direction}</Badge>
                 </div>
                 <p className="min-h-10 text-sm text-muted-foreground">{item.description}</p>
                 <div className="mt-3">
-                  {configured ? <Badge><CheckCircle2 className="mr-1 h-3 w-3" />Configurado</Badge> :
-                    item.available ? <Badge variant="outline">Aguardando URL</Badge> :
-                      <Badge variant="secondary">Próxima etapa</Badge>}
+                  {configured ? <Badge><CheckCircle2 className="mr-1 h-3 w-3" />Configurado — clique para editar</Badge> :
+                    <Badge variant="outline">Adicionar URL</Badge>}
                 </div>
-              </div>;
+              </button>;
             })}
           </CardContent>
         </Card>
