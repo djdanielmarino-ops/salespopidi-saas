@@ -15,6 +15,9 @@ verify_jwt = true
 [functions.master-integrations]
 verify_jwt = true
 
+[functions.send-daily-orders]
+verify_jwt = true
+
 [functions.barrel-inventory-control]
 verify_jwt = true
 

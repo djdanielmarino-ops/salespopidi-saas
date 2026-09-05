@@ -5,9 +5,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-const WEBHOOK_URL = 'https://n8n.popidichopp.online/webhook/d3ba41e0-7d59-4fb5-9085-db9c9761b5a2'
-const WEBHOOK_TIMEOUT_MS = 15000
-
 const PAYMENT_METHOD_MAP: Record<string, string> = {
   dinheiro: '01',
   cartao_credito: '03',
@@ -63,6 +60,29 @@ Deno.serve(async (req) => {
       .eq('id', orderId)
       .single()
     if (orderErr || !order) return jsonResponse(404, { success: false, error: 'Pedido não encontrado' })
+
+    const [{ data: membership }, { data: platformAccess }] = await Promise.all([
+      sb.from('organization_members').select('role,status,permissions')
+        .eq('organization_id', order.organization_id).eq('user_id', user.id).maybeSingle(),
+      sb.from('platform_admins').select('is_active').eq('user_id', user.id).maybeSingle(),
+    ])
+    const canEmit = platformAccess?.is_active || (
+      membership?.status === 'active' && (
+        ['organization_owner', 'organization_admin', 'manager', 'finance'].includes(membership.role) ||
+        membership.permissions?.financial === 'manage'
+      )
+    )
+    if (!canEmit) return jsonResponse(403, { success: false, error: 'Sem permissão para emitir NFe nesta empresa' })
+
+    const { data: endpoint, error: endpointError } = await sb.from('webhook_endpoints')
+      .select('id,url,timeout_ms,max_attempts')
+      .eq('organization_id', order.organization_id)
+      .eq('endpoint_key', 'nfe_issue')
+      .eq('environment', 'production')
+      .eq('is_active', true)
+      .maybeSingle()
+    if (endpointError) throw endpointError
+    if (!endpoint) return jsonResponse(404, { success: false, error: 'Webhook de emissão de NFe não configurado para esta empresa' })
 
     const { data: items } = await sb
       .from('order_items')
@@ -120,7 +140,7 @@ Deno.serve(async (req) => {
     }
     const addrPrefix = useDelivery ? 'Endereço entrega' : 'Endereço cliente'
     for (const [k, label] of [['street','logradouro'],['number','número'],['neighborhood','bairro'],['city','cidade'],['state','UF'],['zip','CEP']] as const) {
-      if (!(addr as any)[k]) missing.push(`${addrPrefix}: ${label}`)
+      if (!addr[k]) missing.push(`${addrPrefix}: ${label}`)
     }
 
     if (!items || items.length === 0) missing.push('Itens do pedido')
@@ -167,8 +187,15 @@ Deno.serve(async (req) => {
     }
     const predominant = Object.entries(byMethod).sort((a,b) => b[1]-a[1])[0]?.[0] || 'dinheiro'
 
-    const idempotencyKey = String(order.order_number)
+    const eventId = crypto.randomUUID()
+    const idempotencyKey = `${order.organization_id}:${order.order_number}`
     const payload = {
+      event_id: eventId,
+      event_type: 'invoice.requested',
+      schema_version: 1,
+      organization_id: order.organization_id,
+      unit_id: order.unit_id || null,
+      occurred_at: new Date().toISOString(),
       idempotency_key: idempotencyKey,
       pedido: {
         numero: String(order.order_number),
@@ -206,19 +233,32 @@ Deno.serve(async (req) => {
     }
 
     // POST with timeout
+    const { data: integrationEvent, error: integrationEventError } = await sb.from('integration_events').insert({
+      organization_id: order.organization_id,
+      event_id: eventId,
+      direction: 'outbound',
+      event_type: 'invoice.requested',
+      aggregate_type: 'order',
+      aggregate_id: order.id,
+      source: 'salespopidi',
+      status: 'processing',
+      payload,
+    }).select('id').single()
+    if (integrationEventError) throw integrationEventError
+
+    const startedAt = new Date().toISOString()
     const ctrl = new AbortController()
-    const timer = setTimeout(() => ctrl.abort(), WEBHOOK_TIMEOUT_MS)
+    const timer = setTimeout(() => ctrl.abort(), endpoint.timeout_ms)
 
     let webhookStatus = 0
-    let webhookJson: any = null
+    let webhookJson: Record<string, unknown> | null = null
     let webhookText = ''
     let networkError: string | null = null
 
-    console.log('[emit-nfe] Antes do fetch para webhook', { url: WEBHOOK_URL, orderId })
-    console.log('[emit-nfe] Payload:', JSON.stringify(payload))
+    console.log('[emit-nfe] Enviando evento', { endpointId: endpoint.id, orderId, eventId })
 
     try {
-      const r = await fetch(WEBHOOK_URL, {
+      const r = await fetch(endpoint.url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -234,6 +274,25 @@ Deno.serve(async (req) => {
     } finally {
       clearTimeout(timer)
     }
+
+    const delivered = webhookStatus >= 200 && webhookStatus < 300
+    await sb.from('webhook_deliveries').insert({
+      organization_id: order.organization_id,
+      event_id: integrationEvent.id,
+      endpoint_id: endpoint.id,
+      attempt_number: 1,
+      status: delivered ? 'delivered' : 'failed',
+      response_status: webhookStatus || null,
+      response_body_excerpt: webhookText.slice(0, 1000),
+      error_message: delivered ? null : networkError || `HTTP ${webhookStatus}`,
+      started_at: startedAt,
+      finished_at: new Date().toISOString(),
+    })
+    await sb.from('integration_events').update({
+      status: delivered ? 'processed' : 'failed',
+      processed_at: delivered ? new Date().toISOString() : null,
+      error_message: delivered ? null : networkError || `HTTP ${webhookStatus}`,
+    }).eq('id', integrationEvent.id)
 
     // 202: keep 'emitindo'
     if (webhookStatus === 202) {

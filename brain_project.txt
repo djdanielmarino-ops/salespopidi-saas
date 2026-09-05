@@ -191,3 +191,29 @@ Primeira etapa iniciada:
 - migracao aplicada ao Supabase e funcoes publicadas;
 - falta cadastrar na nova tela a URL real de pedidos para cervejaria;
 - WhatsApp e webhooks de entrada permanecem para as proximas etapas.
+
+CATALOGO OFICIAL - 05/09/2026
+
+Os sete fluxos iniciais foram definidos:
+
+1. Controle de barris - saida para o n8n.
+2. Automacao de mensagens - saida para o n8n.
+3. Emissao de NFe - saida para o n8n.
+4. Pedidos diarios - saida programada para o n8n.
+5. Compras / Fornecedor - saida para o n8n.
+6. Recebimento de pedido - entrada do n8n no Sales Popidi.
+7. Formulario - entrada do n8n no Sales Popidi.
+
+Todos usam envelope versionado com event_id, event_type, schema_version,
+organization_id, unit_id, occurred_at e data. Os contratos detalhados ficam em
+docs/contratos-webhooks.md.
+
+AVANCO - NFE E PEDIDOS DIARIOS
+
+- Emissao de NFe passou a resolver o webhook nfe_issue pela organization_id.
+- A URL antiga de NFe foi migrada para a organizacao Popidi.
+- A emissao valida se o usuario possui acesso a empresa do pedido.
+- Eventos e tentativas de NFe passam a ser registrados para auditoria e reenvio.
+- Criada a funcao send-daily-orders com filtro obrigatorio por organizacao.
+- A Central Master permite enviar imediatamente o resumo dos pedidos de hoje.
+- O agendamento automatico ainda depende da definicao de horario por empresa.

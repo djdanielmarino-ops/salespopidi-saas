@@ -18,6 +18,9 @@ const endpointKeys = new Set([
   'barrels_receive',
   'barrels_daily_summary',
   'brewery_orders_send',
+  'nfe_issue',
+  'brewery_order_receive',
+  'order_form_receive',
   'messages_automation',
   'custom',
 ])
