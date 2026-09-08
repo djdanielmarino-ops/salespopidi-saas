@@ -328,6 +328,13 @@ export default function MasterIntegrations() {
             </DialogHeader>
             {inboundKey && <div className="space-y-4">
               <div className="space-y-2">
+                <Label>ID da empresa (`organization_id`)</Label>
+                <div className="flex gap-2">
+                  <Input readOnly value={organizationId} className="font-mono text-xs" />
+                  <Button type="button" size="icon" variant="outline" title="Copiar ID da empresa" onClick={() => copy(organizationId, 'ID da empresa')}><Copy className="h-4 w-4" /></Button>
+                </div>
+              </div>
+              <div className="space-y-2">
                 <Label>URL do Sales Popidi</Label>
                 <div className="flex gap-2">
                   <Input readOnly value={`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${inboundConfig[inboundKey].functionName}`} className="font-mono text-xs" />
