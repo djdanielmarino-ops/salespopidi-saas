@@ -9,6 +9,9 @@ verify_jwt = false
 [functions.brewery-webhook]
 verify_jwt = false
 
+[functions.submit-order]
+verify_jwt = false
+
 [functions.master-organizations]
 verify_jwt = true
 

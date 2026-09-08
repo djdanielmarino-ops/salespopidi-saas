@@ -26,7 +26,30 @@ const endpointKeys = new Set([
 ])
 
 const environments = new Set(['test', 'production'])
+const inboundFunctions: Record<string, { functionName: string; name: string; eventTypes: string[] }> = {
+  nfe_issue: {
+    functionName: 'update-nfe',
+    name: 'Emissão de NFe',
+    eventTypes: ['invoice.requested', 'invoice.updated'],
+  },
+  brewery_order_receive: {
+    functionName: 'brewery-webhook',
+    name: 'Recebimento de pedido - entrada',
+    eventTypes: ['brewery_order.accepted', 'brewery_order.confirmed', 'brewery_order.invoice_issued', 'brewery_order.shipped', 'brewery_order.rejected', 'brewery_order.cancelled'],
+  },
+  order_form_receive: {
+    functionName: 'submit-order',
+    name: 'Formulário - entrada',
+    eventTypes: ['order.form_submitted'],
+  },
+}
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+const hex = (buffer: ArrayBuffer) => [...new Uint8Array(buffer)].map((byte) => byte.toString(16).padStart(2, '0')).join('')
+const randomSecret = () => {
+  const bytes = crypto.getRandomValues(new Uint8Array(32))
+  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
@@ -63,6 +86,43 @@ Deno.serve(async (req) => {
         .order('environment')
       if (error) throw error
       return json(200, { endpoints: data || [] })
+    }
+
+    if (action === 'rotate_inbound_secret') {
+      const endpointKey = String(body.endpoint_key || '')
+      const inbound = inboundFunctions[endpointKey]
+      if (!inbound) return json(400, { error: 'Integração de entrada inválida.' })
+
+      const secret = randomSecret()
+      const secretHash = hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(secret)))
+      const inboundUrl = `${url}/functions/v1/${inbound.functionName}`
+      const fields = 'id,name,endpoint_key,url,event_types,is_active,environment,timeout_ms,max_attempts,last_tested_at,last_success_at,last_error_at,last_error_message'
+      const result = endpointKey === 'nfe_issue'
+        ? await admin.from('webhook_endpoints')
+          .update({ secret_ref: `sha256:${secretHash}` })
+          .eq('organization_id', organizationId).eq('endpoint_key', endpointKey).eq('environment', 'production')
+          .select(fields).maybeSingle()
+        : await admin.from('webhook_endpoints').upsert({
+          organization_id: organizationId,
+          name: inbound.name,
+          endpoint_key: endpointKey,
+          url: inboundUrl,
+          event_types: inbound.eventTypes,
+          secret_ref: `sha256:${secretHash}`,
+          environment: 'production',
+          is_active: true,
+          timeout_ms: 15000,
+          max_attempts: 5,
+        }, { onConflict: 'organization_id,endpoint_key,environment' }).select(fields).single()
+      const { data, error } = result
+      if (error) throw error
+      if (!data) return json(409, { error: 'Cadastre primeiro a URL de emissão de NFe em produção.' })
+      await admin.from('audit_logs').insert({
+        organization_id: organizationId, actor_user_id: actorId,
+        action: 'webhook.inbound_secret_rotated', resource_type: 'webhook_endpoint', resource_id: data.id,
+        metadata: { endpoint_key: endpointKey },
+      })
+      return json(200, { endpoint: data, secret, inbound_url: inboundUrl })
     }
 
     if (action === 'upsert') {

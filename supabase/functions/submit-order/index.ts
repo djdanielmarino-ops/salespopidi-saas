@@ -1,18 +1,24 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { authenticateInbound } from "../_shared/inbound-auth.ts";
+
+const webhookCorsHeaders = {
+  ...corsHeaders,
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-api-key",
+};
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { headers: webhookCorsHeaders });
   }
 
   try {
-    const { personal, order, invoice, consent, uid } = await req.json();
+    const { personal, order, invoice, consent, uid, organization_id } = await req.json();
 
     if (!personal?.nome || !personal?.whatsapp) {
       return new Response(
         JSON.stringify({ error: "Nome e WhatsApp são obrigatórios" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 400, headers: { ...webhookCorsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -20,6 +26,21 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
+    const auth = await authenticateInbound(req, supabase, "order_form_receive", organization_id);
+    if ("error" in auth) {
+      return new Response(JSON.stringify({ error: auth.error }), {
+        status: auth.status,
+        headers: { ...webhookCorsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const { data: unit } = await supabase.from("organization_units").select("id")
+      .eq("organization_id", auth.organizationId).eq("status", "active").order("created_at").limit(1).maybeSingle();
+    if (!unit) {
+      return new Response(JSON.stringify({ error: "A empresa não possui unidade ativa" }), {
+        status: 409,
+        headers: { ...webhookCorsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // --- Parse birth date DD/MM/YYYY → YYYY-MM-DD ---
     const parseDate = (value?: string | null) => {
@@ -48,11 +69,13 @@ Deno.serve(async (req: Request) => {
     const birthDateISO = parseDate(personal.nascimento);
 
     // --- Determine person type ---
-    const personType = personal.cnpj ? "PJ" : "PF";
+    const personType = personal.cnpj ? "company" : "individual";
 
     // --- Customer data (mapped fields) ---
     const customerData: Record<string, any> = {
       full_name: personal.razaoSocial || personal.nome,
+      organization_id: auth.organizationId,
+      unit_id: unit.id,
       birth_date: birthDateISO,
       cpf: personal.cpf || null,
       rg: personal.rg || null,
@@ -76,13 +99,14 @@ Deno.serve(async (req: Request) => {
     };
 
     let customerId: string;
-    const lookupField = personType === "PJ" && personal.cnpj ? "cnpj" : "cpf";
-    const lookupValue = personType === "PJ" ? personal.cnpj : personal.cpf;
+    const lookupField = personType === "company" && personal.cnpj ? "cnpj" : "cpf";
+    const lookupValue = personType === "company" ? personal.cnpj : personal.cpf;
 
     if (lookupValue) {
       const { data: existing } = await supabase
         .from("customers")
         .select("id")
+        .eq("organization_id", auth.organizationId)
         .eq(lookupField, lookupValue)
         .maybeSingle();
 
@@ -148,10 +172,12 @@ Deno.serve(async (req: Request) => {
         supabase
           .from("taps")
           .select("id, status, voltage, tap_types(name)")
+          .eq("organization_id", auth.organizationId)
           .neq("status", "manutencao"),
         supabase
           .from("orders")
           .select("tap_id, delivery_date, expected_return_date, status")
+          .eq("organization_id", auth.organizationId)
           .not("tap_id", "is", null)
           .in("status", ["agendado", "em_andamento"]),
       ]);
@@ -185,6 +211,8 @@ Deno.serve(async (req: Request) => {
     const { data: newOrder, error: orderErr } = await supabase
       .from("orders")
       .insert({
+        organization_id: auth.organizationId,
+        unit_id: unit.id,
         customer_id: customerId,
         delivery_date: deliveryDate,
         delivery_type: deliveryType,
@@ -213,8 +241,8 @@ Deno.serve(async (req: Request) => {
     // --- Insert order items ---
     if (order.itens?.length) {
       const [{ data: beerTypes }, { data: barrelModels }] = await Promise.all([
-        supabase.from("beer_types").select("id, name"),
-        supabase.from("barrel_models").select("id, volume"),
+        supabase.from("beer_types").select("id, name").eq("organization_id", auth.organizationId),
+        supabase.from("barrel_models").select("id, volume").eq("organization_id", auth.organizationId),
       ]);
 
       const items = order.itens.map((item: any) => {
@@ -226,6 +254,7 @@ Deno.serve(async (req: Request) => {
         const qty = item.quantidade || 1;
 
         return {
+          organization_id: auth.organizationId,
           order_id: newOrder.id,
           beer_type_id: beerType?.id || beerTypes?.[0]?.id,
           barrel_model_id: barrelModel?.id || null,
@@ -243,14 +272,14 @@ Deno.serve(async (req: Request) => {
     }
 
     return new Response(
-      JSON.stringify({ order_id: newOrder.id }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ success: true, order_id: newOrder.id, organization_id: auth.organizationId }),
+      { status: 200, headers: { ...webhookCorsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err: any) {
     console.error("submit-order error:", err);
     return new Response(
       JSON.stringify({ error: "Erro ao salvar pedido" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 500, headers: { ...webhookCorsHeaders, "Content-Type": "application/json" } }
     );
   }
 });

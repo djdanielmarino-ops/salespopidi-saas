@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, CheckCircle2, FlaskConical, Link2, Pencil, Plus, Power, Send, Trash2, XCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Copy, FlaskConical, KeyRound, Link2, Pencil, Plus, Power, Send, Trash2, XCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { MainLayout } from '@/components/layout/MainLayout';
@@ -40,9 +40,14 @@ const endpointOptions = [
   ['nfe_issue', '3. Emissão de NFe'],
   ['daily_orders', '4. Pedidos diários'],
   ['brewery_orders_send', '5. Compras / Fornecedor'],
-  ['brewery_order_receive', '6. Recebimento de pedido'],
-  ['order_form_receive', '7. Formulário'],
 ] as const;
+
+const inboundConfig = {
+  nfe_issue: { functionName: 'update-nfe', label: 'Retorno da NFe' },
+  brewery_order_receive: { functionName: 'brewery-webhook', label: 'Recebimento de pedido' },
+  order_form_receive: { functionName: 'submit-order', label: 'Formulário' },
+} as const;
+type InboundKey = keyof typeof inboundConfig;
 
 const integrationCatalog = [
   { number: 1, name: 'Controle de barris', direction: 'Saída', key: 'barrels_daily_summary', description: 'Envia ao n8n a atualização e o resumo do estoque de barris.' },
@@ -75,6 +80,8 @@ export default function MasterIntegrations() {
   const queryClient = useQueryClient();
   const [organizationId, setOrganizationId] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [inboundKey, setInboundKey] = useState<InboundKey | null>(null);
+  const [generatedSecret, setGeneratedSecret] = useState('');
   const [form, setForm] = useState(emptyForm);
   // Generated types predate the control-plane migrations.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -141,11 +148,28 @@ export default function MasterIntegrations() {
     onSuccess: async (data) => { await refresh(); toast.success(`Resumo de ${data.count} pedido(s) enviado.`); },
     onError: (error: Error) => toast.error(`Falha no resumo diário: ${error.message}`),
   });
+  const rotateInboundSecret = useMutation({
+    mutationFn: async () => invoke({ action: 'rotate_inbound_secret', organization_id: organizationId, endpoint_key: inboundKey }),
+    onSuccess: async (data) => {
+      await refresh();
+      setGeneratedSecret(data.secret);
+      toast.success('Nova chave gerada. Copie agora: ela não será exibida novamente.');
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
 
   const openCreate = () => { setForm(emptyForm); setDialogOpen(true); };
   const openCreateFor = (endpointKey: string, name: string) => {
     setForm({ ...emptyForm, endpoint_key: endpointKey, name: `${name} - n8n` });
     setDialogOpen(true);
+  };
+  const openInbound = (key: InboundKey) => {
+    setGeneratedSecret('');
+    setInboundKey(key);
+  };
+  const copy = async (value: string, label: string) => {
+    await navigator.clipboard.writeText(value);
+    toast.success(`${label} copiada.`);
   };
   const openEdit = (endpoint: Endpoint) => {
     setForm({
@@ -205,8 +229,11 @@ export default function MasterIntegrations() {
                       </TableCell>
                       <TableCell><div className="flex justify-end gap-1">
                         {endpoint.endpoint_key === 'daily_orders' && <Button size="icon" variant="ghost" title="Enviar pedidos de hoje" onClick={() => sendDaily.mutate()} disabled={sendDaily.isPending}><Send className="h-4 w-4" /></Button>}
-                        <Button size="icon" variant="ghost" title="Testar" onClick={() => test.mutate(endpoint.id)} disabled={test.isPending}><FlaskConical className="h-4 w-4" /></Button>
-                        <Button size="icon" variant="ghost" title="Editar" onClick={() => openEdit(endpoint)}><Pencil className="h-4 w-4" /></Button>
+                        {endpoint.endpoint_key !== 'brewery_order_receive' && endpoint.endpoint_key !== 'order_form_receive' && <>
+                            <Button size="icon" variant="ghost" title="Testar" onClick={() => test.mutate(endpoint.id)} disabled={test.isPending}><FlaskConical className="h-4 w-4" /></Button>
+                            <Button size="icon" variant="ghost" title="Editar" onClick={() => openEdit(endpoint)}><Pencil className="h-4 w-4" /></Button>
+                          </>}
+                        {endpoint.endpoint_key in inboundConfig && <Button size="icon" variant="ghost" title="Configurar acesso de entrada" onClick={() => openInbound(endpoint.endpoint_key as InboundKey)}><KeyRound className="h-4 w-4" /></Button>}
                         <Button size="icon" variant="ghost" title="Excluir" onClick={() => { if (confirm(`Excluir o webhook “${endpoint.name}”?`)) remove.mutate(endpoint.id); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                       </div></TableCell>
                     </TableRow>
@@ -227,7 +254,9 @@ export default function MasterIntegrations() {
                 key={item.number}
                 type="button"
                 className="rounded-lg border p-4 text-left transition-colors hover:border-primary hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                onClick={() => configuredEndpoint ? openEdit(configuredEndpoint) : openCreateFor(item.key, item.name)}
+                onClick={() => item.direction === 'Entrada'
+                  ? openInbound(item.key as InboundKey)
+                  : configuredEndpoint ? openEdit(configuredEndpoint) : openCreateFor(item.key, item.name)}
                 disabled={!organizationId}
                 aria-label={`${configuredEndpoint ? 'Editar' : 'Cadastrar'} webhook: ${item.name}`}
               >
@@ -288,6 +317,35 @@ export default function MasterIntegrations() {
               <div className="flex items-center justify-between rounded-lg border p-3"><div><Label htmlFor="active">Webhook ativo</Label><p className="text-xs text-muted-foreground">Endpoints pausados não recebem eventos.</p></div><Switch id="active" checked={form.is_active} onCheckedChange={(checked) => setForm({ ...form, is_active: checked })} /></div>
               <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button><Button type="submit" disabled={save.isPending}>{save.isPending ? 'Salvando...' : 'Salvar webhook'}</Button></div>
             </form>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={Boolean(inboundKey)} onOpenChange={(open) => { if (!open) setInboundKey(null); }}>
+          <DialogContent className="sm:max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>{inboundKey ? inboundConfig[inboundKey].label : 'Integração de entrada'}</DialogTitle>
+              <DialogDescription>Use esta URL no n8n e envie a chave no header x-api-key. A empresa também deve ser informada no campo organization_id do JSON.</DialogDescription>
+            </DialogHeader>
+            {inboundKey && <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>URL do Sales Popidi</Label>
+                <div className="flex gap-2">
+                  <Input readOnly value={`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${inboundConfig[inboundKey].functionName}`} className="font-mono text-xs" />
+                  <Button type="button" size="icon" variant="outline" onClick={() => copy(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${inboundConfig[inboundKey].functionName}`, 'URL')}><Copy className="h-4 w-4" /></Button>
+                </div>
+              </div>
+              <div className="rounded-lg border p-4">
+                <p className="text-sm font-medium">Chave da empresa</p>
+                <p className="mt-1 text-xs text-muted-foreground">Gerar uma nova chave invalida imediatamente a anterior.</p>
+                {generatedSecret && <div className="mt-3 flex gap-2">
+                  <Input readOnly value={generatedSecret} className="font-mono text-xs" />
+                  <Button type="button" size="icon" variant="outline" onClick={() => copy(generatedSecret, 'Chave')}><Copy className="h-4 w-4" /></Button>
+                </div>}
+                <Button type="button" className="mt-3" onClick={() => rotateInboundSecret.mutate()} disabled={rotateInboundSecret.isPending}>
+                  <KeyRound className="mr-2 h-4 w-4" />{rotateInboundSecret.isPending ? 'Gerando...' : generatedSecret ? 'Gerar outra chave' : 'Gerar chave de acesso'}
+                </Button>
+              </div>
+            </div>}
           </DialogContent>
         </Dialog>
       </div>

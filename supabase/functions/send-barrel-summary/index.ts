@@ -17,10 +17,11 @@ Deno.serve(async(req)=>{
   if(!organizationId||!payload.date||!Array.isArray(payload.barrels)||!payload.message)return reply(400,{success:false,error:'Resumo inválido.'})
   const admin=createClient(base,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
   const [{data:member},{data:platform}]=await Promise.all([
-   admin.from('organization_members').select('status').eq('organization_id',organizationId).eq('user_id',user.id).maybeSingle(),
+   admin.from('organization_members').select('role,status,permissions').eq('organization_id',organizationId).eq('user_id',user.id).maybeSingle(),
    admin.from('platform_admins').select('is_active').eq('user_id',user.id).maybeSingle(),
   ])
-  if(member?.status!=='active'&&!platform?.is_active)return reply(403,{success:false,error:'Sem acesso à empresa.'})
+  const allowed=platform?.is_active||(member?.status==='active'&&(['organization_owner','organization_admin','manager'].includes(member.role)||member.permissions?.barrels==='manage'))
+  if(!allowed)return reply(403,{success:false,error:'Sem permissão para enviar o resumo de barris.'})
   const {data:endpoint}=await admin.from('webhook_endpoints').select('url,timeout_ms').eq('organization_id',organizationId)
    .eq('endpoint_key','barrels_daily_summary').eq('environment','production').eq('is_active',true).maybeSingle()
   if(!endpoint)return reply(404,{success:false,error:'Webhook de resumo de barris não configurado.'})

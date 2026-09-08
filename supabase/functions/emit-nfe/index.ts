@@ -117,7 +117,8 @@ Deno.serve(async (req) => {
 
     // Required field validation
     const missing: string[] = []
-    if (customer.person_type === 'PJ') {
+    const isCompany = customer.person_type === 'PJ' || customer.person_type === 'company'
+    if (isCompany) {
       if (!customer.cnpj) missing.push('CNPJ')
       if (!customer.company_name) missing.push('Razão social')
     } else {
@@ -202,9 +203,9 @@ Deno.serve(async (req) => {
         data_emissao: new Date().toISOString().slice(0, 19),
       },
       cliente: {
-        tipo: customer.person_type,
-        cpf_cnpj: customer.person_type === 'PJ' ? unmask(customer.cnpj) : unmask(customer.cpf),
-        razao_social: customer.person_type === 'PJ' ? customer.company_name : customer.full_name,
+        tipo: isCompany ? 'PJ' : 'PF',
+        cpf_cnpj: isCompany ? unmask(customer.cnpj) : unmask(customer.cpf),
+        razao_social: isCompany ? customer.company_name : customer.full_name,
         nome_fantasia: customer.trade_name || undefined,
         inscricao_estadual: customer.state_registration || undefined,
         email: customer.email || undefined,

@@ -30,7 +30,8 @@ depois de aceitar o evento e deve ignorar, com sucesso, repetições do mesmo ID
 - Direção: Sales Popidi para n8n
 - Evento: invoice.requested
 - Dados: cliente, endereço fiscal, itens, pagamentos, totais e pedido.
-- O retorno da nota utilizará um endpoint de entrada próprio.
+- Retorno: `POST /functions/v1/update-nfe`, usando `x-api-key` e
+  `organization_id`. Para compatibilidade, aceita `status` ou `nfe_status`.
 
 ## 4. Pedidos diários
 
@@ -57,6 +58,9 @@ depois de aceitar o evento e deve ignorar, com sucesso, repetições do mesmo ID
   brewery_order.rejected e brewery_order.cancelled.
 - A atualização eletrônica não dá entrada física no estoque.
 - A loja confere o recebimento e registra falta, sobra ou divergência.
+- Endpoint: `POST /functions/v1/brewery-webhook`.
+- Autenticação: chave individual da empresa no header `x-api-key`.
+- Campos obrigatórios: `organization_id`, `event_id` e `event_type`.
 
 ## 7. Formulário
 
@@ -65,14 +69,29 @@ depois de aceitar o evento e deve ignorar, com sucesso, repetições do mesmo ID
 - Evento: order.form_submitted
 - Dados: empresa de destino, identificador externo, cliente, consentimento,
   endereço, itens, entrega, cobrança e observações.
-- O identificador externo e o event_id impedem pedidos duplicados.
+- Endpoint: `POST /functions/v1/submit-order`.
+- Autenticação: chave individual da empresa no header `x-api-key`.
+- Campos obrigatórios: `organization_id`, `personal.nome` e
+  `personal.whatsapp`.
+
+## Configuração das entradas
+
+O Master gera uma chave diferente para cada empresa. O valor aparece somente
+uma vez; no banco é armazenado apenas o hash SHA-256. Ao rotacionar a chave, a
+anterior deixa de funcionar imediatamente.
+
+No n8n, configurar:
+
+- Método: POST.
+- Header: `x-api-key: <chave gerada no Master>`.
+- Corpo JSON: sempre incluir `organization_id` da empresa selecionada.
 
 ## Segurança
 
-- Saídas usarão assinatura HMAC-SHA256 por organização.
-- Entradas validarão organização, assinatura, timestamp e idempotência.
-- Segredos nunca serão enviados ao navegador nem gravados nos payloads.
-- O payload bruto será usado na validação da assinatura.
+- Entradas validam a organização e uma chave individual por empresa.
+- A chave aparece no navegador apenas no momento da geração e somente seu hash
+  SHA-256 é persistido.
+- Eventos da cervejaria usam `event_id` para idempotência.
 - Eventos e tentativas serão registrados nas tabelas de integração.
 - Dados sensíveis deverão ser mascarados nos logs.
 
