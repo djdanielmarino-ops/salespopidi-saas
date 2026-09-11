@@ -1,0 +1,247 @@
+docs/webhooks-schema.md
+# Dicionário de Webhooks e Integrações Externas
+
+
+Documento de referência das integrações automáticas do sistema (n8n, cervejaria, NFe).
+Todas as chamadas externas saem sempre do backend (Edge Functions) — o navegador nunca chama o n8n direto e nunca vê chaves/segredos.
+
+Legenda:
+- **Saída (outbound)**: o sistema envia dados para o n8n / parceiro.
+- **Entrada (inbound)**: o n8n / parceiro envia dados para o sistema.
+
+---
+
+## 1. Saída — Movimentação de equipamento (saída/entrada)
+
+| Item | Valor |
+|---|---|
+| Função | `send-webhook` |
+| Destino | `https://n8n.popidichopp.online/webhook/28ebd702-74bc-462d-ba87-02089e4d3dbb` |
+| Método | POST (JSON) |
+| Autenticação de entrada | JWT do usuário logado (obrigatório) |
+| Autenticação no destino | nenhuma (URL secreta) |
+| Disparado por | Botões "Saída"/"Entrada" de equipamento na lista de pedidos e no card do pedido |
+
+Regras:
+- `action = "saida"` quando o equipamento sai para o cliente (pedido vai para `em_andamento`).
+- `action = "entrada"` quando o equipamento retorna (pedido vai para `finalizado`).
+- Falha no envio **não** bloqueia a mudança de status do pedido (erro apenas registrado no console).
+- Sem retentativa automática e sem idempotência.
+
+```json
+{
+  "action": "saida",
+  "order_id": "uuid",
+  "order_number": 123,
+  "customer": "Nome do cliente",
+  "customer_phone": "11999999999",
+  "delivery_date": "2026-09-08",
+  "delivery_type": "entrega",
+  "tap": "CH-01",
+  "cylinder": "CIL-07",
+  "total": 850.5,
+  "status": "em_andamento",
+  "timestamp": "2026-09-08T14:00:00.000Z"
+}
+```
+
+Resposta da função: `{ "success": true, "status": 200 }`
+
+---
+
+## 2. Saída — Resumo diário de barris (cervejaria)
+
+| Item | Valor |
+|---|---|
+| Função | `send-barrel-summary` |
+| Destino | `https://n8n.popidichopp.online/webhook/controlebarrischopp` |
+| Método | POST (JSON) |
+| Autenticação de entrada | JWT do usuário logado |
+| Permissão | apenas usuários com "Gerenciar" em Barris |
+| Disparado por | Botão "Enviar resumo diário" em Controle de Barris |
+
+Regras:
+- Considera movimentos do dia corrente (00:00 até 23:59 local).
+- `initialBreweryStock = estoque atual - enviados + recebidos`.
+- `message` já vem formatada para WhatsApp.
+- Se o webhook responder erro, a função devolve 502 e o usuário vê a falha.
+
+```json
+{
+  "event": "barrel_brewery_daily_summary",
+  "date": "2026-09-08",
+  "timezone": "America/Sao_Paulo",
+  "barrels": [
+    {
+      "volume": 30,
+      "initialBreweryStock": 12,
+      "receivedFromBrewery": 4,
+      "sentToBrewery": 6,
+      "currentBreweryStock": 10
+    }
+  ],
+  "message": "*CONTROLE DE BARRIS — CERVEJARIA*\nterça-feira, 08 de setembro de 2026\n\n30L | Anterior: 12 | Recebidos: 4 | Enviados: 6 | Atual: 10",
+  "sentBy": "uuid-do-usuario"
+}
+```
+
+Campos obrigatórios validados: `date`, `barrels` (array), `message`.
+
+---
+
+| Permissão | admin ou "Gerenciar" em Barris |
+
+Regras:
+- Só envia pedidos em `draft` ou `pending_send`.
+- Registra o evento em `integration_events` antes do envio (`event_id` único).
+- Sucesso → status `sent`; falha → evento `failed` com `next_retry_at` em 5 minutos.
+
+```json
+{
+  "event_id": "uuid",
+  "event_type": "brewery_order.created",
+  "schema_version": 1,
+  "occurred_at": "2026-09-08T14:00:00.000Z",
+  "order": {
+    "id": "uuid",
+    "status": "pending_send",
+    "brewery_order_items": [
+      { "id": "uuid", "quantity": 10, "beer_types": { "name": "IPA", "code": "IPA" }, "barrel_models": { "volume": 30 } }
+    ]
+  }
+}
+```
+
+---
+
+## 5. Entrada — Pedidos do dia para o n8n
+
+| Item | Valor |
+|---|---|
+| Função | `n8n-daily-orders` (GET) |
+| Autenticação | header `x-api-key` (ou `Authorization: Bearer`) com o segredo `N8N_API_KEY` |
+| Parâmetro | `?date=YYYY-MM-DD` (padrão: hoje, fuso São Paulo) |
+
+Regras: retorna todos os pedidos da data que **não** estejam cancelados, ordenados por horário.
+
+```json
+{
+  "date": "2026-09-08",
+  "count": 2,
+  "orders": [
+    {
+      "id": "uuid", "order_number": 123, "status": "agendado",
+      "delivery_type": "entrega", "delivery_date": "2026-09-08", "delivery_time": "18:00",
+      "subtotal": 600, "delivery_fee": 50, "discount": 0, "total": 650,
+      "delivery_address_street": "Rua X", "delivery_address_city": "São Paulo",
+      "customers": { "full_name": "Cliente", "phone": "11999999999", "person_type": "PF" },
+      "taps": { "code": "CH-01", "voltage": "220V" },
+      "cylinders": { "code": "CIL-07" },
+      "order_items": [
+        { "quantity_liters": 30, "barrel_quantity": 1, "unit_price": 20, "total_price": 600,
+          "beer_types": { "name": "IPA", "code": "IPA" }, "barrel_models": { "volume": 30 } }
+      ]
+    }
+  ]
+}
+```
+
+---
+
+## 6. Entrada — Retorno de NFe do n8n
+
+| Item | Valor |
+|---|---|
+| Função | `update-nfe` (POST) |
+| Autenticação | header `x-api-key` com `N8N_API_KEY` |
+
+Regras de mapeamento de status:
+- `emitida`: `autorizada`, `autorizado`, `emitida`, `emitido`, `aprovada`, `aprovado`, `authorized`, `100`
+- `erro`: `rejeitada`, `rejeitado`, `erro`, `error`, `denegada`, `cancelada`
+
+Identifica o pedido por `order_id` **ou** `order_number`.
+
+```json
+{
+  "order_number": 123,
+  "status": "autorizada",
+  "nfe_number": "000123",
+  "nfe_key": "35260912345678000199550010000001231000000123",
+  "error_message": null
+}
+```
+
+Resposta: `{ "success": true, "order": { "id": "...", "nfe_status": "emitida", ... } }`
+
+---
+
+## 7. Entrada — Eventos da cervejaria
+
+| Item | Valor |
+|---|---|
+| Função | `brewery-webhook` (POST) |
+| Autenticação | HMAC SHA-256 no header `x-webhook-signature` usando `BREWERY_WEBHOOK_SECRET` |
+| Idempotência | `event_id` (evento repetido retorna `duplicate: true`) |
+
+Mapa de eventos → status do pedido:
+
+| event_type | status |
+|---|---|
+| `brewery_order.accepted` | `acknowledged` |
+| `brewery_order.confirmed` | `confirmed` |
+| `brewery_order.released` | `released` |
+| `brewery_order.invoice_issued` | `released` |
+| `brewery_order.shipped` | `in_transit` |
+| `brewery_order.rejected` | `rejected` |
+| `brewery_order.cancelled` | `cancelled` |
+
+```json
+{
+  "event_id": "uuid",
+  "event_type": "brewery_order.shipped",
+  "order_id": "uuid",
+  "external_order_id": "CERV-9988",
+  "expected_delivery_date": "2026-09-10",
+  "invoice": { "number": "5567", "key": "3526...", "issued_at": "2026-09-09T10:00:00Z" },
+  "items": [ { "item_id": "uuid", "quantity_released": 8 } ]
+}
+```
+
+---
+
+## 8. Entrada — Pedido de formulário externo
+
+| Item | Valor |
+|---|---|
+| Função | `submit-order` (POST, pública) |
+| Obrigatórios | `personal.nome` e `personal.whatsapp` |
+
+Regras:
+- Cliente é identificado por CNPJ (PJ) ou CPF (PF); existindo, é atualizado; senão, criado.
+- `person_type` = `PJ` quando houver CNPJ, senão `PF`.
+- Dados de nota fiscal e responsáveis entram nas observações do pedido.
+- Não atualiza NFe — para isso use `update-nfe`.
+
+```json
+{
+  "personal": {
+    "nome": "Cliente", "whatsapp": "11999999999", "cpf": "12345678900",
+    "cnpj": null, "razaoSocial": null, "inscricaoEstadual": null,
+    "cep": "01000000", "endereco": "Rua X", "numero": "100",
+    "bairro": "Centro", "cidade": "São Paulo", "uf": "SP"
+  },
+  "order": { "itens": [], "nomeResponsavel": "Fulano", "telResponsavel": "1199..." },
+  "invoice": { "desejaNota": true, "cnpjCpf": "...", "razaoSocial": "...", "ie": "...", "im": "..." },
+  "consent": true,
+  "uid": "id-do-formulario"
+}
+```
+
+---
+
+## Boas práticas aplicadas
+
+- Segredos (`N8N_API_KEY`, `BREWERY_WEBHOOK_SECRET`, `BREWERY_WEBHOOK_URL`) ficam apenas no backend.
+- Envios sensíveis usam idempotência (`idempotency_key`, `event_id`) para evitar duplicidade.
+- Emissão de NFe e pedidos à cervejaria têm timeout de 15s e trava contra reenvio simultâneo.
+- Mensagens de erro exibidas ao usuário são sanitizadas.
