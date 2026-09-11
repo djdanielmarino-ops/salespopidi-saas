@@ -1,3 +1,4 @@
+import { validateCustomer } from './customer.ts'
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
 const corsHeaders = {
@@ -26,24 +27,6 @@ const isoDate = (value: unknown) => {
   return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : ''
 }
 
-function validateCustomer(row: Row) {
-  const errors: string[] = []
-  const document = digits(row.cpf_cnpj)
-  const kind = text(row.tipo_pessoa).toUpperCase()
-  const personType = kind === 'PJ' || document.length === 14 ? 'company' : 'individual'
-  const fullName = text(row.nome)
-  const phone = digits(row.telefone)
-  if (!fullName) errors.push('Nome é obrigatório.')
-  if (phone.length < 10) errors.push('Telefone deve conter DDD.')
-  if (document && ![11, 14].includes(document.length)) errors.push('CPF/CNPJ inválido.')
-  const email = text(row.email).toLowerCase()
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.push('E-mail inválido.')
-  return { errors, normalized: {
-    person_type: personType, full_name: fullName, phone, email,
-    cpf: document.length === 11 ? document : '', cnpj: document.length === 14 ? document : '',
-    company_name: text(row.razao_social), trade_name: text(row.nome_fantasia), notes: text(row.observacoes),
-  } }
-}
 
 function validateEquipment(row: Row) {
   const errors: string[] = []

@@ -37,6 +37,10 @@ O Excel pode abrir e salvar os modelos CSV. A leitura direta de `.xlsx` fica par
 
 Os dados são gravados na tabela operacional `customers`. CPF/CNPJ e telefone são normalizados para dígitos. Nome e telefone são obrigatórios. O banco continua sendo a última barreira contra CPF/CNPJ duplicado na mesma organização.
 
+O modelo inclui também `email`, `rg`, `data_nascimento`, `cep`, `endereco`, `numero`, `complemento`, `bairro`, `cidade` e `estado`, além de tipo de pessoa, CPF/CNPJ, razão social, nome fantasia e observações. Os campos adicionais são opcionais; arquivos antigos continuam aceitos. Nascimento aceita DD/MM/AAAA ou AAAA-MM-DD e exige uma data válida. CEP aceita pontuação e deve ter oito dígitos; estado usa uma sigla de UF, como SP. Endereço corresponde ao logradouro; número e complemento têm colunas próprias.
+
+Para disponibilizar esses campos, publique em conjunto a migração `extend_customer_import_fields`, a função `onboarding-imports` e o frontend. Lotes validados antes da atualização devem ser reenviados e validados novamente para incluir os novos campos.
+
 ### Equipamentos
 
 Cada bem entra na tabela operacional correspondente (`barrels`, `taps` ou `cylinders`) com um código patrimonial único por organização. Barris exigem capacidade em litros. O saldo físico inicial deve ser conferido depois no controle patrimonial de barris.

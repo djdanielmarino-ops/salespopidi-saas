@@ -20,9 +20,9 @@ type Batch = { id: string; kind: ImportKind; status: string; file_name: string; 
 const definitions: Record<ImportKind, { label: string; headers: string[]; sample: string[]; help: string }> = {
   customers: {
     label: 'Clientes',
-    headers: ['nome', 'tipo_pessoa', 'cpf_cnpj', 'telefone', 'email', 'razao_social', 'nome_fantasia', 'observacoes'],
-    sample: ['Cliente Exemplo', 'PF', '12345678901', '11999999999', 'cliente@exemplo.com', '', '', 'Importação inicial'],
-    help: 'PF/PJ, CPF/CNPJ e telefone são normalizados automaticamente.',
+    headers: ['nome', 'tipo_pessoa', 'cpf_cnpj', 'telefone', 'email', 'razao_social', 'nome_fantasia', 'observacoes', 'rg', 'data_nascimento', 'cep', 'endereco', 'numero', 'complemento', 'bairro', 'cidade', 'estado'],
+    sample: ['Cliente Exemplo', 'PF', '12345678901', '11999999999', 'cliente@exemplo.com', '', '', 'Importação inicial', '12345678X', '15/01/1990', '01310-100', 'Avenida Paulista', '1000', 'Apto 101', 'Bela Vista', 'São Paulo', 'SP'],
+    help: 'Nome e telefone com DDD são obrigatórios. RG, nascimento e endereço são opcionais. Use DD/MM/AAAA ou AAAA-MM-DD para nascimento e a sigla da UF para estado.',
   },
   equipment: {
     label: 'Equipamentos',
@@ -94,7 +94,7 @@ export function ImportManagement() {
   const [batches, setBatches] = useState<Batch[]>([]);
   const [busy, setBusy] = useState(false);
   const definition = definitions[kind];
-  const missingHeaders = useMemo(() => rows.length ? definition.headers.filter((header) => !(header in rows[0])) : [], [definition.headers, rows]);
+  const missingHeaders = useMemo(() => rows.length ? (kind === 'customers' ? ['nome', 'telefone'] : definition.headers).filter((header) => !(header in rows[0])) : [], [kind, definition.headers, rows]);
 
   const loadBatches = async () => {
     if (!organization) return;
