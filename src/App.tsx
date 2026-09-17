@@ -15,6 +15,7 @@ import Cylinders from "./pages/Cylinders";
 import Inventory from "./pages/Inventory";
 import Settings from "./pages/Settings";
 import Financial from "./pages/Financial";
+import HistoricalSales from "./pages/HistoricalSales";
 import Costs from "./pages/Costs";
 import CRM from "./pages/CRM";
 import Products from "./pages/Products";
@@ -66,6 +67,7 @@ const App = () => (
           <Route path="/products" element={<Protected><PermissionGuard module="inventory"><Products /></PermissionGuard></Protected>} />
           <Route path="/settings" element={<Protected><PermissionGuard module="settings"><Settings /></PermissionGuard></Protected>} />
           <Route path="/financial" element={<Protected><PermissionGuard module="financial"><Financial /></PermissionGuard></Protected>} />
+          <Route path="/historical-sales" element={<Protected><PermissionGuard module="financial"><HistoricalSales /></PermissionGuard></Protected>} />
           <Route path="/costs" element={<Protected><PermissionGuard module="costs"><Costs /></PermissionGuard></Protected>} />
           <Route path="/crm" element={<Protected><PermissionGuard module="crm"><CRM /></PermissionGuard></Protected>} />
           <Route path="/unauthorized" element={<Protected><Unauthorized /></Protected>} />

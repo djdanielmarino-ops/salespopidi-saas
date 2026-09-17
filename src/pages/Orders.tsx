@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Label } from '@/components/ui/label';
 import { useOrders, useReturnEquipment, useAddPayment, useOrderItems, useOrderProductItems, useOrderPayments, useUpdateOrderStatus, useDeleteOrder } from '@/hooks/useOrders';
 import { Order, OrderItem, OrderStatus } from '@/types/database';
-import { Columns3, FileText, LayoutList, Pencil, Plus, Printer, Search, Trash2 } from 'lucide-react';
+import { Columns3, FileText, History, LayoutList, Pencil, Plus, Printer, Search, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -240,6 +240,23 @@ export default function Orders() {
             </Link>
           </Button>
         </div>
+
+        <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-medium">Vendas históricas importadas</p>
+              <p className="text-sm text-muted-foreground">
+                Os registros anteriores ao uso do sistema ficam separados dos pedidos operacionais para não alterar estoque, equipamentos ou financeiro atual.
+              </p>
+            </div>
+            <Button asChild variant="outline" className="shrink-0">
+              <Link to="/historical-sales">
+                <History className="mr-2 h-4 w-4" />
+                Consultar histórico
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>
